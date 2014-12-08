@@ -1,5 +1,4 @@
-#include <sys/types.h>
-#include <pthread.h>
+#include <math.h>
 
 void show_dxf_file(struct DxfFile *dxf_file);
 void nest_dxf(struct DxfFile *fdxf_files, int f_count, int width, int height);
@@ -248,7 +247,6 @@ void nest_dxf2(struct DxfFile *fdxf_files, int f_count, int width, int heigth)
 	while (can_place) {
 		double level_width;
 		int max_index, max_index_pos, lmin_index;
-			
 		for (k = 0; k < n_levels; k++) {
 			level_width = levels[k].to_x - levels[k].from_x;		
 			if (level_width < min_width) {
@@ -384,10 +382,126 @@ void nest_dxf2(struct DxfFile *fdxf_files, int f_count, int width, int heigth)
 
 }
 
+int find_line_cross(double k1, double b1, double k2, double b2, struct PointD *cross_point) 
+{
+	double x, y;
+	if (k1 == k2) 
+		return 0;
+	
+	x = (b2 - b1) / (k1 - k2);
+	y = k1 * x + b1;
+
+	cross_point->x = x;
+	cross_point->y = y;
+	return 1;
+}
+
+void determine_line(double *k, double *b, struct PointD p1, struct PointD p2)
+{
+	*k = (p1.y - p2.y) / (p1.x - p2.x);
+	*b = p1.y - (*k) * p2.x;
+}
+
+int cross_check(struct DxfFile curr_file, struct DxfFile pos_file, struct PointD offset, struct PointD pos_offset, int positioned)
+{
+	double xl1, xr1, yt1, yb1, xl2, xr2, yt2, yb2;
+	double k1, k2, b1, b2;
+	int i, j, k, m;
+
+	xl1 = offset.x;
+	xr1 = curr_file.x_max + offset.x;
+	yb1 = offset.y;
+	yt1 = curr_file.y_max + offset.y;
+
+	xl2 = pos_offset.x;
+	xr2 = pos_file.x_max + pos_offset.x;
+	yb2 = pos_offset.y;
+	yt2 = pos_file.y_max + pos_offset.y;
+
+	if (xr1 < xl2)
+		return 0;
+	if (xl1 > xr2)
+		return 0;
+	if (yt1 < yb2)
+		return 0;
+	if (yb1 > yt2)
+		return 0;
+	else {
+		xl1 = (xl1 > xl2)? xl1 : xl2;
+		xr1 = (xr1 < xr2)? xr1 : xr2;
+		yt1 = (yt1 < yt2)? yt1 : yt2;
+		yb1 = (yb1 > yb2)? yb2 : yb1; 
+	}
+
+
+	for (i = 0; i < curr_file.n_primitives; i++) {
+		for (j = 0; j < curr_file.n_controldots[i] - 1; j++) {
+			struct PointD p_curr1, p_curr2;
+			double k_curr, b_curr;
+			double x_min_curr, x_max_curr;
+			
+			p_curr1 = curr_file.primitives[i].points[j];
+			p_curr1.x += offset.x;
+			p_curr1.y += offset.y;
+
+			p_curr2 = curr_file.primitives[i].points[j + 1];
+			p_curr2.x += offset.x;
+			p_curr2.y += offset.y;
+
+			if ((p_curr1.x <= xl1 && p_curr2.x <= xl1) || (p_curr1.x >= xr1 && p_curr2.x >= xr2))
+				continue;
+			if ((p_curr1.y <= yb1 && p_curr2.y <= yb1) || (p_curr1.y >= yt1 && p_curr2.y >= yt1))
+				continue;
+				
+			determine_line(&k_curr, &b_curr, p_curr1, p_curr2);
+			
+			x_min_curr = (p_curr1.x < p_curr2.x)? p_curr1.x : p_curr2.x;
+			x_max_curr = (p_curr1.x > p_curr2.x)? p_curr1.x : p_curr2.x;	
+			for (k = 0; k < pos_file.n_primitives; k++) {
+				for (m = 0; m < pos_file.n_controldots[k] - 1; m++) {
+					struct PointD p_pos1, p_pos2;
+					struct PointD cross_point;
+					double k_pos, b_pos;
+					double x_min_pos, x_max_pos;
+					int res;
+
+					p_pos1 = pos_file.primitives[k].points[m];
+					p_pos1.x += pos_offset.x;
+					p_pos1.y += pos_offset.y;
+					
+					p_pos2 = pos_file.primitives[k].points[m + 1];
+					p_pos2.x += pos_offset.x;
+					p_pos2.y += pos_offset.y;
+
+					if ((p_pos1.x <= xl1 && p_pos2.x <= xl1) || (p_pos1.x >= xr1 && p_pos2.x >= xr1))
+						continue;
+					if ((p_pos1.y <= yb1 && p_pos2.y <= yb1) || (p_pos1.y >= yt1 && p_pos2.y >= yt1))
+						continue;
+
+					determine_line(&k_pos, &b_pos, p_pos1, p_pos2);
+
+					res = find_line_cross(k_curr, b_curr, k_pos, b_pos, &cross_point);
+
+					if (!res)
+						continue;
+
+					x_min_pos = (p_pos1.x < p_pos2.x)? p_pos1.x : p_pos2.x;
+					x_max_pos = (p_pos1.x > p_pos2.x)? p_pos1.x : p_pos2.x;
+
+					if ((cross_point.x >=  x_min_curr && cross_point.x >= x_min_pos) && (cross_point.x <= x_max_curr && cross_point.x <= x_max_pos))
+							return 1;
+				}
+			}
+		}
+	}
+	return 0;
+}
+
 void nest_dxf_stair(struct DxfFile *fdxf_files, int f_count, int width, int heigth)
 {
 	int i, j, k, m, can_place, extreme_rect_ind;
 	int positioned, *how_many, max_position;
+	double rect_xl, rect_yb, rect_xr, rect_yt;
 	struct Position *positions;	
 	double x_minp, y_minp;
 
@@ -408,14 +522,27 @@ void nest_dxf_stair(struct DxfFile *fdxf_files, int f_count, int width, int heig
 	positioned = 1;
 
 	how_many[0] -= 1;
+
+	rect_xl = 0;
+	rect_yb = 0;
+	rect_xr = fdxf_files[0].x_max;
+	rect_yt = fdxf_files[0].y_max;
 	
 	can_place = 1;
 	while (can_place) {
-		for (i = 0; i < f_count; i++) {
+			int placed = 0;
+		for (i = 0; i < f_count;) {
 			struct DxfFile curr_file;
-			struct PointD offset;
+			struct PointD offset, min_offset;
 			struct Rectangle extreme_rect;
 			int extreme_rect_ind;
+			int was_placed;
+			double min_square;
+				
+			if (how_many[i] == 0)
+				i++;
+			if (i == f_count)
+					break;
 
 			curr_file = fdxf_files[i];
 			extreme_rect = curr_file.rects[0];
@@ -426,14 +553,98 @@ void nest_dxf_stair(struct DxfFile *fdxf_files, int f_count, int width, int heig
 					extreme_rect = tmp_rect;
 				}
 			}
-
-			for (j = 0; j < n_positioned; j++) {
-				struct DxfFile pos_file;				
+			
+			min_square = -1;
+			was_placed = 0;
+			
+			for (j = 0; j < positioned; j++) {
+				struct DxfFile pos_file;
+				pos_file = positions[j].file;				
 				for (k = 0; k < pos_file.n_rects; k++) {
 					struct PointD pos_offset;
-					struct Rectangle pos_rect;	
+					struct Rectangle pos_rect;
+					double tmp_rect_xl, tmp_rect_xr, tmp_rect_yt, tmp_rect_yb;
+					double tmp_square;
+					int crossed;
+
+					pos_rect = pos_file.rects[k];
+					pos_offset.x = positions[j].x;
+					pos_offset.y = positions[j].y;
+					
+					offset.x = (pos_rect.x + pos_offset.x) - extreme_rect.x;
+					offset.y = (pos_rect.y + pos_offset.y) - extreme_rect.y;
+					
+					crossed = cross_check(curr_file, pos_file, offset, pos_offset, positioned);
+					if (crossed)
+							continue;
+
+					tmp_rect_xl = (rect_xl < offset.x)? rect_xl : offset.x;
+					tmp_rect_xr = (rect_xr > offset.x + curr_file.x_max)? rect_xr : offset.x + curr_file.x_max;
+					tmp_rect_yb = (rect_yb < offset.y)? rect_yb : offset.y;
+					tmp_rect_yt = (rect_yt > offset.y + curr_file.y_max)? rect_yt : offset.y + curr_file.y_max;
+					
+					tmp_square = (tmp_rect_xr - tmp_rect_xl) * (tmp_rect_yt - tmp_rect_yb);
+					printf("tmp=%f min=%f\n", tmp_square, min_square);
+					if (min_square == -1) {
+						min_square = tmp_square;
+						rect_xl = tmp_rect_xl;
+						rect_xr = tmp_rect_xr;
+						rect_yb = tmp_rect_yb;
+						rect_yt = tmp_rect_yt;
+						min_square = tmp_square;						
+						min_offset = offset;
+						was_placed = 1;
+						printf("first_square\n");	
+					} else if (tmp_square < min_square) {
+						printf("here\n");
+						rect_xl = tmp_rect_xl;
+						rect_xr = tmp_rect_xr;
+						rect_yb = tmp_rect_yb;
+						rect_yt = tmp_rect_yt;	
+						min_square = tmp_square;					
+						min_offset = offset;		
+					} else if (tmp_square == min_square) {
+						if (fabs(offset.y) < fabs(min_offset.y)) {
+							printf("here ==\n");
+							rect_xl = tmp_rect_xl;
+							rect_xr = tmp_rect_xr;
+							rect_yb = tmp_rect_yb;
+							rect_yt = tmp_rect_yt;	
+							min_square = tmp_square;					
+							min_offset = offset;	
+						}
+					}
 				}
 			}
+
+			if (was_placed) {
+					positions[positioned].file = curr_file;
+					positions[positioned].x = min_offset.x;
+					positions[positioned].y = min_offset.y;
+					how_many[i] -= 1;
+					
+					if (how_many[i] == 0)
+							i++;
+
+					positioned++;
+				
+				if (positioned == max_position) {					
+					max_position *= 2;
+					positions = (struct Position*)realloc(positions, sizeof(struct Position) * max_position);
+				}
+
+				placed = 1;
+			} else 
+				i++;
+		}
+
+		if (!placed)
+				break;
+		
+		can_place = 0;
+		for (i = 0; i < f_count; i++) {
+				if (how_many[i] > 0)
+						can_place = 1;
 		}
 	}
 	
@@ -450,9 +661,9 @@ void nest_dxf_stair(struct DxfFile *fdxf_files, int f_count, int width, int heig
 	for (k = 0; k < positioned; k++) {
 		positions[k].x -= x_minp;
 		positions[k].y -= y_minp;
-	}
+	} 
 
-		
+	printf ("positioned = %d\n", positioned);	
 	n_positioned = positioned;
 	draw_nested(positions);
 }
