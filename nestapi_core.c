@@ -2,67 +2,25 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include <gtk/gtk.h>
-
-#pragma once
+#include "nestapi_core_structs.h"
 
 #define MAX_LINE_LENGTH 2048
 
-enum {
-	DXF_TYPE_LINE,
-	DXF_TYPE_SPLINE,
-};
+void dxf_file_new(struct DxfFile* dxf_file, char *path);
+static void read_entity(struct DxfFile *dxf_file);
+static void prepare_to_read(char *path, struct DxfFile *dxf_file);
+static void find_control_dots(struct DxfFile *dxf_file);
+static void move(struct DxfFile *dxf_file);
+static void create_polygon_jarvis(struct DxfFile *dxf_file);
+static double vector_len(struct PointD vec);
+static void aprox_rects(struct DxfFile *dxf_file);
+static void gravity_center_in_polygon(struct DxfFile *dxf_file);
 
-struct PointD {
-	double x, y;
-};
+static struct PointD get_vector(struct PointD point1, struct PointD point2);
+static struct PointD get_start_point(struct DxfFile *dxf_file);
 
-struct Rectangle {
-	double x, y, width, heigth;
-};
-
-struct Polygon {
-	struct PointD *points;
-	int n_points;
-};
-
-struct DxfPrimitive {
-	struct PointD *points;
-	int type;
-};
-
-struct TextPrimitive {
-	char **lines;
-};
-
-struct DxfFile {
-	char *path;
-	struct TextPrimitive *text_primitives;
-	struct DxfPrimitive *primitives;
-	struct Polygon polygon;
-	struct Rectangle *rects;
-	int n_primitives, n_types, n_rects; 
-	int max_types, max_lines; 
-	int *n_controldots, *str_count, *types;
-	double m_heigth, m_width; 
-	double x_min, x_max, y_min, y_max;
-};
-
-void dxf_file_new(struct DxfFile *dxf_file, char *path);
-void read_entity(struct DxfFile *dxf_file);
-void prepare_to_read(char *path, struct DxfFile *dxf_file);
-void find_control_dots(struct DxfFile *dxf_file);
-void move(struct DxfFile *dxf_file);
-void create_polygon(struct DxfFile *dxf_file);
-void create_polygon_jarvis(struct DxfFile *dxf_file);
-double vector_len(struct PointD vec);
-void aprox_rects(struct DxfFile *dxf_file);
-
-struct PointD get_vector(struct PointD point1, struct PointD point2);
-struct PointD get_start_point(struct DxfFile *dxf_file);
-
-int is_new_figure(char *line, struct DxfFile *dxf_file, int curr_prim);
-int is_new_figure2(char *line, struct DxfFile *dxf_file);
+static int is_new_figure(char *line, struct DxfFile *dxf_file, int curr_prim);
+static int is_new_figure2(char *line, struct DxfFile *dxf_file);
 
 void dxf_file_new(struct DxfFile* dxf_file, char *path)
 {
@@ -80,9 +38,10 @@ void dxf_file_new(struct DxfFile* dxf_file, char *path)
 	move(dxf_file);
 	create_polygon_jarvis(dxf_file);
 	aprox_rects(dxf_file);
+	gravity_center_in_polygon(dxf_file);
 }
 
-int is_new_figure2(char *line, struct DxfFile *dxf_file)
+static int is_new_figure2(char *line, struct DxfFile *dxf_file)
 {
 	if (strcmp(line, "LINE\r\n") == 0) {
 		dxf_file->n_primitives++;
@@ -96,7 +55,7 @@ int is_new_figure2(char *line, struct DxfFile *dxf_file)
 	return 0;
 }
 
-int is_new_figure(char *line, struct DxfFile *dxf_file, int curr_prim)
+static int is_new_figure(char *line, struct DxfFile *dxf_file, int curr_prim)
 {
 	int n_type;
 
@@ -115,7 +74,7 @@ int is_new_figure(char *line, struct DxfFile *dxf_file, int curr_prim)
 }
 
 
-void prepare_to_read(char *path, struct DxfFile *dxf_file)
+static void prepare_to_read(char *path, struct DxfFile *dxf_file)
 {
 	int curr_line = 0, write = 0;
 	char *line;
@@ -147,7 +106,7 @@ void prepare_to_read(char *path, struct DxfFile *dxf_file)
 	dxf_file->max_lines = curr_line;
 }
 
-void read_entity(struct DxfFile *dxf_file)
+static void read_entity(struct DxfFile *dxf_file)
 {
 	int curr_line = 0, curr_prim = 0, write = 0, i = 0, j = 0;
 	char *line;
@@ -201,7 +160,7 @@ void read_entity(struct DxfFile *dxf_file)
 	fclose(txt_file);
 }
 
-void find_control_dots(struct DxfFile *dxf_file)
+static void find_control_dots(struct DxfFile *dxf_file)
 {
 	char *line;
 	int count = 0, i = 0, n = 0, k = 0;
@@ -237,7 +196,7 @@ void find_control_dots(struct DxfFile *dxf_file)
 	}
 }
 
-void move(struct DxfFile *dxf_file)
+static void move(struct DxfFile *dxf_file)
 {
 	int first = 1;
 	int i = 0, j = 0;
@@ -273,10 +232,10 @@ void move(struct DxfFile *dxf_file)
 	dxf_file->x_max -= dxf_file->x_min;
 	dxf_file->y_max -= dxf_file->y_min;
 	dxf_file->m_width = dxf_file->x_max;
-	dxf_file->m_heigth = dxf_file->y_max;
+	dxf_file->m_height = dxf_file->y_max;
 }
 
-struct PointD get_start_point(struct DxfFile *dxf_file)
+static struct PointD get_start_point(struct DxfFile *dxf_file)
 {
 	struct PointD p;
 	double x, y;
@@ -304,7 +263,7 @@ struct PointD get_start_point(struct DxfFile *dxf_file)
 	return p;
 }
 
-struct PointD get_vector(struct PointD point1, struct PointD point2)
+static struct PointD get_vector(struct PointD point1, struct PointD point2)
 {
 	struct PointD vector;
 	vector.x = point2.x - point1.x;
@@ -312,14 +271,14 @@ struct PointD get_vector(struct PointD point1, struct PointD point2)
 	return vector;
 }
 
-double vector_len(struct PointD vec)
+static double vector_len(struct PointD vec)
 {	
 	double len;
 	len = sqrt(pow(vec.x, 2) + pow(vec.y, 2));
 	return len;
 }
 
-void create_polygon_jarvis(struct DxfFile *dxf_file)
+static void create_polygon_jarvis(struct DxfFile *dxf_file)
 {
 	int n_points = 0;
 	int n = 0;
@@ -370,22 +329,7 @@ void create_polygon_jarvis(struct DxfFile *dxf_file)
 	dxf_file->polygon.n_points = n;
 }
 
-int cmp(const void *a, const void *b)
-{
-	double y1, y2;
-
-	y1 = *(double*)a;
-	y2 = *(double*)b;
-
-	if (y1 < y2)
-		return -1;
-	if (y1 > y2)
-		return 1;
-	else 
-		return 0;	
-}
-
-void aprox_rects(struct DxfFile *dxf_file)
+static void aprox_rects(struct DxfFile *dxf_file)
 {
 	int i, j, k, m, n, count;
 	
@@ -400,7 +344,7 @@ void aprox_rects(struct DxfFile *dxf_file)
 	
 		for (i = 0; i < dxf_file->n_primitives; i++) {
 		for (k = 0; k < dxf_file->n_controldots[i] - 1; k++) {
-			double width, heigth, x, y, tmp, tmp1;
+			double width, height, x, y, tmp, tmp1;
 
 			tmp = dxf_file->primitives[i].points[k].x;
 			tmp1 = dxf_file->primitives[i].points[k + 1].x;
@@ -410,16 +354,78 @@ void aprox_rects(struct DxfFile *dxf_file)
 			tmp = dxf_file->primitives[i].points[k].y;
 			tmp1 = dxf_file->primitives[i].points[k + 1].y;
 			y = (tmp < tmp1)? tmp : tmp1;
-			heigth = fabs(tmp - tmp1);
+			height = fabs(tmp - tmp1);
 			dxf_file->rects[count].x = x;
 			dxf_file->rects[count].y = y;
 			dxf_file->rects[count].width = width;
-			dxf_file->rects[count].heigth = heigth;
+			dxf_file->rects[count].height = height;
 			count++;
 		}
 
 		dxf_file->n_rects = n - 1;
 	}
+}
+
+static void gravity_center_in_polygon(struct DxfFile *dxf_file)
+{
+	int i, n, start, step, end, n_squares;
+	double *squares;
+	double square_sum, x_sum, y_sum;
+	struct PointD *centers, tmp_p, tmp_p1;
+
+	n = dxf_file->polygon.n_points;
+	squares = (double*)malloc(sizeof(double) * n);
+	centers = (struct PointD*)malloc(sizeof(struct PointD) * n - 1);
+
+	tmp_p = dxf_file->polygon.points[0];
+	tmp_p1 = dxf_file->polygon.points[1];
+
+	start = (tmp_p.y <= tmp_p1.y)? 0 : n - 1;
+	step = (tmp_p.y <= tmp_p1.y)? 1 : -1;
+	end = (tmp_p.y <= tmp_p1.y)? n - 1 : 1;
+
+	n_squares = 0;
+	for (i = start; i != (end + 1 * step); i += step) {
+		struct PointD p1, p2, rect_gravity_center, triangle_gravity_center;
+		double rect_square, triangle_square;
+		double x_projection, y_min, y_max;
+	
+		p1 = dxf_file->polygon.points[i];
+		p2 = dxf_file->polygon.points[i + step];
+		if(p1.x == p2.x || (p1.y == 0 && p2.y == 0))
+			continue;
+		
+		x_projection = p2.x - p1.x;
+		y_min = (p1.y < p2.y)? p1.y : p2.y;
+		y_max = (p1.y > p2.y)? p1.y : p2.y;
+		
+		rect_square = x_projection * y_min;
+		triangle_square = x_projection * (y_max - y_min) / 2;
+		rect_gravity_center.x = x_projection / 2;
+		rect_gravity_center.y = y_min / 2;
+		
+		triangle_gravity_center.y = (y_min + y_min + y_max) / 3;
+		if (p1.y > p2.y) {
+			triangle_gravity_center.x = (p1.x + p1.x + p2.x) / 3;
+		} else {
+			triangle_gravity_center.x = (p1.x + p2.x + p2.x) / 3; 
+		}	
+
+		squares[n_squares] = rect_square + triangle_square;
+		centers[n_squares].x = (rect_square * rect_gravity_center.x + triangle_square * triangle_gravity_center.x) / (rect_square + triangle_square);
+		centers[n_squares].y = (rect_square * rect_gravity_center.y + triangle_square * triangle_gravity_center.y) / (rect_square + triangle_square);
+		n_squares++;
+	}
+	
+	square_sum = x_sum = y_sum = 0.0;
+	for (i = 0; i < n_squares; i++) {
+		square_sum += squares[i];
+		x_sum += centers[i].x * squares[i];
+		y_sum += centers[i].y * squares[i];
+	}
+
+	dxf_file->polygon.gravity_center.x = x_sum / square_sum;
+	dxf_file->polygon.gravity_center.y = y_sum / square_sum;
 }
 
 

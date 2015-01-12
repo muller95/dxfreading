@@ -1,10 +1,9 @@
 #include <stdlib.h>
 #include <gtk/gtk.h>
-#include "dxf_file_linux.h"
-#include "dxf_view.h"
+#include "nestapi_core.h"
 
 
-GtkWidget *main_window, *flist, *text_width, *text_heigth;
+GtkWidget *main_window, *flist, *text_width, *text_height;
 GtkListStore *list_store;
 struct DxfFile *dxf_files;
 char **f_names;
@@ -24,36 +23,36 @@ void on_window_destroy(GtkWidget *widget, gpointer user_data)
 
 void on_button_nest_click(GtkWidget *widget, gpointer user_data)
 {
-	const char *cwidth, *cheigth;
-	int width, heigth;
+	const char *cwidth, *cheight;
+	int width, height;
 	
 	cwidth = gtk_entry_get_text(GTK_ENTRY(text_width));
-	cheigth = gtk_entry_get_text(GTK_ENTRY(text_heigth));
+	cheight = gtk_entry_get_text(GTK_ENTRY(text_height));
 
 	width = atoi(cwidth);
-	heigth = atoi(cheigth);
+	height = atoi(cheight);
 
-	if (heigth == 0 || width == 0) {
-		printf("something wring with width and heigth\n");
+	if (height == 0 || width == 0) {
+		printf("something wring with width and height\n");
 		return;
 	}
 
-	nest_dxf2(dxf_files, f_count, width, heigth);
+	nest_dxf(dxf_files, f_count, width, height);
 }
 
 
 void on_subitem_nest_click (GtkWidget *widget, gpointer user_data)
 {
-	GtkWidget *nest_options_window, *buffer_width, *buffer_heigth; 
+	GtkWidget *nest_options_window, *buffer_width, *buffer_height; 
 	GtkWidget *nest_button; 
-	GtkWidget *v_box, *h_box1, *h_box2, *lbl_width, *lbl_heigth;
+	GtkWidget *v_box, *h_box1, *h_box2, *lbl_width, *lbl_height;
 	
 	nest_options_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 
 	text_width = gtk_entry_new();
-	text_heigth = gtk_entry_new();
+	text_height = gtk_entry_new();
 	lbl_width = gtk_label_new("width: ");
-	lbl_heigth = gtk_label_new("heigth:");
+	lbl_height = gtk_label_new("height:");
 	nest_button = gtk_button_new_with_label("Nest");
 
 	v_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
@@ -64,8 +63,8 @@ void on_subitem_nest_click (GtkWidget *widget, gpointer user_data)
 	gtk_box_pack_start(GTK_BOX(h_box1), lbl_width, 0, 0, 0);
 	gtk_box_pack_start(GTK_BOX(h_box1), text_width, 0, 0, 0);
 
-	gtk_box_pack_start(GTK_BOX(h_box2), lbl_heigth, 0, 0, 0);	
-	gtk_box_pack_start(GTK_BOX(h_box2), text_heigth, 0, 0, 0);
+	gtk_box_pack_start(GTK_BOX(h_box2), lbl_height, 0, 0, 0);	
+	gtk_box_pack_start(GTK_BOX(h_box2), text_height, 0, 0, 0);
 
 	gtk_box_pack_start(GTK_BOX(v_box), h_box1, 0, 0, 0);
 	gtk_box_pack_start(GTK_BOX(v_box), h_box2, 0, 0, 0);
@@ -78,22 +77,20 @@ void on_subitem_nest_click (GtkWidget *widget, gpointer user_data)
 
 	gtk_window_set_default_size(GTK_WINDOW(nest_options_window), 320, 240);
 	gtk_widget_show_all(nest_options_window);
-		
-	//nest_dxf2(dxf_files, f_count, 1000, 500);
 }
 
 void on_subitem_nest1_click (GtkWidget *widget, gpointer user_data)
 {
-	/*GtkWidget *nest_options_window, *buffer_width, *buffer_heigth; 
+	/*GtkWidget *nest_options_window, *buffer_width, *buffer_height; 
 	GtkWidget *nest_button; 
-	GtkWidget *v_box, *h_box1, *h_box2, *lbl_width, *lbl_heigth;
+	GtkWidget *v_box, *h_box1, *h_box2, *lbl_width, *lbl_height;
 	
 	nest_options_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 
 	text_width = gtk_entry_new();
-	text_heigth = gtk_entry_new();
+	text_height = gtk_entry_new();
 	lbl_width = gtk_label_new("width: ");
-	lbl_heigth = gtk_label_new("heigth:");
+	lbl_height = gtk_label_new("height:");
 	nest_button = gtk_button_new_with_label("Nest");
 
 	v_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
@@ -104,8 +101,8 @@ void on_subitem_nest1_click (GtkWidget *widget, gpointer user_data)
 	gtk_box_pack_start(GTK_BOX(h_box1), lbl_width, 0, 0, 0);
 	gtk_box_pack_start(GTK_BOX(h_box1), text_width, 0, 0, 0);
 
-	gtk_box_pack_start(GTK_BOX(h_box2), lbl_heigth, 0, 0, 0);	
-	gtk_box_pack_start(GTK_BOX(h_box2), text_heigth, 0, 0, 0);
+	gtk_box_pack_start(GTK_BOX(h_box2), lbl_height, 0, 0, 0);	
+	gtk_box_pack_start(GTK_BOX(h_box2), text_height, 0, 0, 0);
 
 	gtk_box_pack_start(GTK_BOX(v_box), h_box1, 0, 0, 0);
 	gtk_box_pack_start(GTK_BOX(v_box), h_box2, 0, 0, 0);
@@ -118,7 +115,7 @@ void on_subitem_nest1_click (GtkWidget *widget, gpointer user_data)
 
 	gtk_window_set_default_size(GTK_WINDOW(nest_options_window), 320, 240);
 	gtk_widget_show_all(nest_options_window);*/
-	nest_dxf_stair(dxf_files, f_count, 1000, 500);
+	start_nfp_nesting(dxf_files, f_count, 1200, 1200);
 }
 
 
