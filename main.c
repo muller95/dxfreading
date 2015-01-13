@@ -115,7 +115,7 @@ void on_subitem_nest1_click (GtkWidget *widget, gpointer user_data)
 
 	gtk_window_set_default_size(GTK_WINDOW(nest_options_window), 320, 240);
 	gtk_widget_show_all(nest_options_window);*/
-	start_nfp_nesting(dxf_files, f_count, 1200, 1200);
+	start_nfp_nesting(dxf_files, f_count, 800, 800);
 }
 
 
@@ -124,12 +124,16 @@ void on_subitem_open_click (GtkWidget *widget, gpointer user_data)
 	GtkWidget *ofd;
 	GtkFileChooserAction action;
 	GtkTreeIter iter;
-//	GtkTreeModel *list_store;
+    GtkFileFilter *filter;
 	struct DxfFile dxf_file;
 	int res;
 	
 	action = GTK_FILE_CHOOSER_ACTION_OPEN;
+    filter = gtk_file_filter_new();
+    gtk_file_filter_add_pattern(filter, "*.dxf");
+    gtk_file_filter_set_name(filter, "DXF Files | *.dxf");
 	ofd = gtk_file_chooser_dialog_new("Open File", NULL, action, "_Cancel", GTK_RESPONSE_CANCEL, "_Open", GTK_RESPONSE_ACCEPT, NULL);
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(ofd), filter);
 	res = gtk_dialog_run(GTK_DIALOG(ofd));
 
 	if (res == GTK_RESPONSE_ACCEPT)	{	

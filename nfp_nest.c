@@ -3,11 +3,20 @@
 #include <gtk/gtk.h>
 #include "nestapi_core_structs.h"
 
+struct Generation {
+    int *genom;
+    int genon_size;
+    int *cluster_size;
+}
+
 int n_positioned;
+int max_generations, n_generations;
+double min_height;
+struct Genration *generations;
 
 void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double width, double height);
 
-static void generate_first_generation(struct DxfFile *dxf_files, int f_count, double width);
+static void generate_first_generation(struct DxfFile *dxf_files, int f_count, double width, double height);
 static void rotate_polygon(struct DxfFile *dxf_file, double angle);
 static int dxf_cmp(const void *file1, const void *file2);
 static int find_line_cross(double k1, double b1, double k2, double b2, struct PointD *cross_point);
@@ -27,7 +36,7 @@ static gboolean on_draw_nested_signal(GtkWidget *widget, cairo_t *cr, gpointer u
 /*	for (j = 0; j < n_positioned; j++) {
 		struct DxfFile dxf_file;
 		double offset_x, offset_y;
-			
+				
 		dxf_file = positions[j].file;
 		offset_x = positions[j].x;
 		offset_y = positions[j].y;
@@ -42,10 +51,10 @@ static gboolean on_draw_nested_signal(GtkWidget *widget, cairo_t *cr, gpointer u
 				x = dxf_file.primitives[i].points[k + 1].x + offset_x;
 				y = dxf_file.primitives[i].points[k + 1].y + offset_y;
 				cairo_line_to(cr, x, y);	
-			}
 		}
-		
-		cairo_stroke(cr); */
+	}
+	
+	cairo_stroke(cr); */
 
 	cairo_set_source_rgb(cr, 255, 0, 0);
 	for (j = 0; j < n_positioned; j++) {
@@ -224,18 +233,18 @@ static int cross_check(struct DxfFile curr_file, struct DxfFile pos_file, struct
 	double k1, k2, b1, b2;
 	int i, k;
 
-	xl1 = curr_file.x_min + offset.x;
+	xl1 = offset.x;
 	xr1 = curr_file.x_max + offset.x;
-	yb1 = curr_file.y_min + offset.y;
+	yb1 = offset.y;
 	yt1 = curr_file.y_max + offset.y;
 
-	xl2 = pos_file.x_min + pos_offset.x;
+	xl2 = pos_offset.x;
 	xr2 = pos_file.x_max + pos_offset.x;
-	yb2 = pos_file.y_min + pos_offset.y;
+	yb2 = pos_offset.y;
 	yt2 = pos_file.y_max + pos_offset.y;
 
-/*	if (xl1 > xr2 || xr1 < xl2 || yb1 > yt2 || yt1 < yb2)
-		return 0;*/ 
+	if (xl1 >= xr2 || xr1 <= xl2 || yb1 >= yt2 || yt1 <= yb2)
+		return 0;
 			
 	curr_poly = curr_file.polygon;
 	pos_poly = pos_file.polygon;
@@ -254,7 +263,7 @@ static int cross_check(struct DxfFile curr_file, struct DxfFile pos_file, struct
 		for (k = 0; k < pos_poly.n_points - 1; k++) {
 			int res;
 			struct PointD p_p1, p_p2, cross_point;
-			
+	
 			p_p1 = pos_poly.points[k];
 			p_p1.x += pos_offset.x;
 			p_p1.y += pos_offset.y;
@@ -279,12 +288,17 @@ static int cross_check(struct DxfFile curr_file, struct DxfFile pos_file, struct
 			
 			xl1 = (c_p1.x < c_p2.x)? c_p1.x : c_p2.x;
 			xr1 = (c_p1.x > c_p2.x)? c_p1.x : c_p2.x;
+			yt1 = (c_p1.y > c_p2.y)? c_p1.y : c_p2.y;
+			yb1 = (c_p1.y < c_p2.y)? c_p1.y : c_p2.y;
+
 			xl2 = (p_p1.x < p_p2.x)? p_p1.x : p_p2.x;
 			xr2 = (p_p1.x > p_p2.x)? p_p1.x : p_p2.x;
+			yt2 = (p_p1.y > p_p2.y)? p_p1.y : p_p2.y;
+			yb2 = (p_p1.y < p_p2.y)? p_p1.y : p_p2.y;
 
 
 
-			if ((cross_point.x >= xl1 && cross_point.x <= xr1) && (cross_point.x >= xl2 && cross_point.x <= xr2)) 
+			if ((cross_point.x > xl1 && cross_point.x < xr1) && (cross_point.x > xl2 && cross_point.x < xr2) && (cross_point.y > yb1 && cross_point.y < yt1) && (cross_point.y > yb2 && cross_point.y < yt2)) 
 				return 1;
 		}
 	}
@@ -295,41 +309,40 @@ static int cross_check(struct DxfFile curr_file, struct DxfFile pos_file, struct
 
 
 
-static void generate_first_generation(struct DxfFile *dxf_files, int f_count, double width)
+static void generate_first_generation(struct DxfFile *dxf_files, int f_count, double width, double height)
 {
 	int i, j, k, m; 
 	int can_place, max_position, positioned;
 	int *how_many;
-	double super_height;
+	double curr_height;
 	struct Position *positions;
 	
-	super_height = 0.0;
 	max_position = f_count;
 	positions = (struct Position*)malloc(sizeof(struct Position) * max_position);
 	how_many = (int*)malloc(sizeof(int) * f_count);	
 	qsort(dxf_files, f_count, sizeof(struct DxfFile), dxf_cmp);
 	
-	for (i = 0; i < f_count; i++) {
-		how_many[i] = 1;
-		super_height += dxf_files[i].m_height;
-	}
+    curr_height = 0;
+	for (i = 0; i < f_count; i++) 
+		how_many[i] = 4;
 
 	positioned = 0;
 	can_place = 1;
 
 	for (i = 0; i < f_count;) {
 		int angle, angle_step;
-		int res;
+		int res, was_placed;
 		double min_length, x, y;
 		struct DxfFile curr_file;
 					
 		curr_file = dxf_files[i];
 		angle_step = 15;
 		min_length = -1;
-	
-		for (x = 0.0; x < width - curr_file.m_width ; x += 1) {
+	    
+        was_placed = 0;
+		for (x = 0.0; x < width - curr_file.m_width ; x += 1.0) {
 			res = 0;
-			for (y = super_height; y >= 0; y -= 1) {
+			for (y = height + curr_file.m_height; y >= 0; y -= 1.0) {
 				double g_x, g_y, tmp_length;
 				for (j = 0; j < positioned; j++) {
 					int pos_ind;
@@ -350,11 +363,15 @@ static void generate_first_generation(struct DxfFile *dxf_files, int f_count, do
 				if (res == 1) 
 					break;
 						
-						
+				if (curr_file.y_max + y > height)				
+					continue;
+		
 				g_x = curr_file.polygon.gravity_center.x + x;
 				g_y = curr_file.polygon.gravity_center.y + y;
-				tmp_length  = sqrt(pow(g_x, 2) + pow(g_y, 2));
+				tmp_length  = sqrt(pow(g_x, 2) + pow(g_y, 2));			
+
 				if (min_length == -1 || tmp_length < min_length) {
+                    was_placed = 1;
 					min_length = tmp_length;
 					positions[positioned].file = curr_file;
 					positions[positioned].x = x;
@@ -367,10 +384,16 @@ static void generate_first_generation(struct DxfFile *dxf_files, int f_count, do
 			}
 		}
 
+        if (!was_placed) {
+            i++;
+            continue;
+        }
+
+        curr_height = (curr_height > positions[positioned].y + curr_file.y_max)? curr_height : positions[positioned].y + curr_file.y_max;
 
 		positioned++;
-		printf("positioned = %d n offset.x=%f offset.y=%f %s\n", positioned, positions[positioned-1].x,
-				positions[positioned-1].y, positions[positioned - 1].file.path);
+		printf("positioned = %d n offset.x=%f offset.y=%f height=%f %s\n", positioned, positions[positioned-1].x,
+				positions[positioned-1].y, positions[positioned - 1].file.m_height, positions[positioned - 1].file.path);
 		if (positioned == max_position) {					
 			max_position *= 2;
 			positions = (struct Position*)realloc(positions, sizeof(struct Position) * max_position);
@@ -381,6 +404,8 @@ static void generate_first_generation(struct DxfFile *dxf_files, int f_count, do
 			i++;
 	}
 
+    min_height = (min_height < curr_height) min_height : curr_height;
+
 	
 	printf("positioned = %d\n", positioned);
 	n_positioned = positioned;
@@ -390,5 +415,9 @@ static void generate_first_generation(struct DxfFile *dxf_files, int f_count, do
 
 void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double width, double height)
 {
-	generate_first_generation(dxf_files, f_count, width);
+    min_height = height;
+    max_generations = f_count;
+    n_generations = 0;
+    generations = (struct Generation*)malloc(sizeof(struct Generation) * max_generations);
+	generate_first_generation(dxf_files, f_count, width, height);
 }
