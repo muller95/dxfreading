@@ -33,7 +33,7 @@ void on_button_nest_click(GtkWidget *widget, gpointer user_data)
 	height = atoi(cheight);
 
 	if (height == 0 || width == 0) {
-		printf("something wring with width and height\n");
+		printf("something wrong with width and height\n");
 		return;
 	}
 
@@ -118,6 +118,16 @@ void on_subitem_nest1_click (GtkWidget *widget, gpointer user_data)
 	start_nfp_nesting(dxf_files, f_count, 800, 800);
 }
 
+int check_if_opened(char *path)
+{
+    int i;
+    for (i = 0; i < f_count; i++) {
+        if (strcmp(dxf_files[i].path, path) == 0)
+            return 1;
+    }
+
+    return 0;
+}
 
 void on_subitem_open_click (GtkWidget *widget, gpointer user_data)
 {
@@ -134,24 +144,38 @@ void on_subitem_open_click (GtkWidget *widget, gpointer user_data)
     gtk_file_filter_set_name(filter, "DXF Files | *.dxf");
 	ofd = gtk_file_chooser_dialog_new("Open File", NULL, action, "_Cancel", GTK_RESPONSE_CANCEL, "_Open", GTK_RESPONSE_ACCEPT, NULL);
     gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(ofd), filter);
+    gtk_file_chooser_set_select_multiple(GTK_FILE_CHOOSER(ofd), TRUE);
 	res = gtk_dialog_run(GTK_DIALOG(ofd));
 
-	if (res == GTK_RESPONSE_ACCEPT)	{	
+	if (res == GTK_RESPONSE_ACCEPT)	{
+        GSList* filenames_list;	
 		char *filename;
-		filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(ofd));
-		f_names[f_count] = filename;
-		dxf_file_new(&dxf_file, filename);
-		dxf_files[f_count] = dxf_file;
-		f_count++;
-		if (f_count == max_files) {
-
-			max_files *= 2;
-			f_names = (char**)realloc(f_names ,sizeof(char*) * max_files);
-			dxf_files = (struct DxfFile*)realloc(dxf_files ,sizeof(struct DxfFile) * max_files);
-
-		}
-		gtk_list_store_append(list_store, &iter);
-		gtk_list_store_set(list_store, &iter, COLUMN_ITEM_NUMBER, f_count, COLOMN_ITEM_PATH, f_names[f_count - 1], -1);
+		filenames_list = gtk_file_chooser_get_filenames(GTK_FILE_CHOOSER(ofd));
+        
+        while (filenames_list != NULL) {
+            filename = filenames_list->data;
+            if (check_if_opened(filename)) {
+                 gtk_widget_destroy(ofd);
+                 filenames_list = filenames_list->next;
+                 continue;
+            }
+        
+	    	f_names[f_count] = filename;
+         
+	    	dxf_file_new(&dxf_file, filename);
+	    	dxf_files[f_count] = dxf_file;
+	    	f_count++;
+	    	if (f_count == max_files) {
+    
+	    		max_files *= 2;
+	    		f_names = (char**)realloc(f_names ,sizeof(char*) * max_files);
+		    	dxf_files = (struct DxfFile*)realloc(dxf_files ,sizeof(struct DxfFile) * max_files);
+    
+	    	}
+	    	gtk_list_store_append(list_store, &iter);
+    		gtk_list_store_set(list_store, &iter, COLUMN_ITEM_NUMBER, f_count, COLOMN_ITEM_PATH, f_names[f_count - 1], -1);
+            filenames_list = filenames_list->next;
+        }
 	}
 	gtk_widget_destroy(ofd);
 }

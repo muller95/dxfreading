@@ -2,12 +2,12 @@
 #include <math.h>
 #include <gtk/gtk.h>
 #include "nestapi_core_structs.h"
+#include "dxf_work_functions.h"
 
 struct Generation {
     int *genom;
     int genon_size;
-    int *cluster_size;
-}
+};
 
 int n_positioned;
 int max_generations, n_generations;
@@ -335,7 +335,7 @@ static void generate_first_generation(struct DxfFile *dxf_files, int f_count, do
 		double min_length, x, y;
 		struct DxfFile curr_file;
 					
-		curr_file = dxf_files[i];
+		curr_file = filedup(dxf_files[i]);
 		angle_step = 15;
 		min_length = -1;
 	    
@@ -380,7 +380,12 @@ static void generate_first_generation(struct DxfFile *dxf_files, int f_count, do
 					positions[positioned].file = curr_file;
 					positions[positioned].x = x;
 					positions[positioned].y = y;
-				}		
+				}
+                
+                if (y == 0) {
+                    x = width;
+                    break;
+                }
 			}
 		}
 
@@ -404,7 +409,7 @@ static void generate_first_generation(struct DxfFile *dxf_files, int f_count, do
 			i++;
 	}
 
-    min_height = (min_height < curr_height) min_height : curr_height;
+    min_height = (min_height < curr_height)? min_height : curr_height;
 
 	
 	printf("positioned = %d\n", positioned);
@@ -415,9 +420,18 @@ static void generate_first_generation(struct DxfFile *dxf_files, int f_count, do
 
 void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double width, double height)
 {
+    int i;
+    struct DxfFile *tmp_dxf_files;
+
     min_height = height;
     max_generations = f_count;
     n_generations = 0;
-    generations = (struct Generation*)malloc(sizeof(struct Generation) * max_generations);
-	generate_first_generation(dxf_files, f_count, width, height);
+
+//    generations = (struct Generation*)malloc(sizeof(struct Generation) * max_generations);
+    tmp_dxf_files = (struct DxfFile*)malloc(sizeof(struct DxfFile) * f_count);
+    
+    for (i =0; i < f_count; i++)
+        tmp_dxf_files[i] = filedup(dxf_files[i]);
+
+	generate_first_generation(tmp_dxf_files, f_count, width, height);
 }

@@ -31,8 +31,7 @@ struct DxfFile {
 	struct TextPrimitive *text_primitives;
 	struct DxfPrimitive *primitives;
 	struct Polygon polygon;
-	struct Rectangle *rects;
-	int n_primitives, n_types, n_rects; 
+	int n_primitives, n_types; 
 	int max_types, max_lines; 
 	int *n_controldots, *str_count, *types;
 	double m_height, m_width; 

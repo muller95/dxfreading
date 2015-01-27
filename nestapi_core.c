@@ -13,7 +13,6 @@ static void find_control_dots(struct DxfFile *dxf_file);
 static void move(struct DxfFile *dxf_file);
 static void create_polygon_jarvis(struct DxfFile *dxf_file);
 static double vector_len(struct PointD vec);
-static void aprox_rects(struct DxfFile *dxf_file);
 static void gravity_center_in_polygon(struct DxfFile *dxf_file);
 
 static struct PointD get_vector(struct PointD point1, struct PointD point2);
@@ -37,7 +36,6 @@ void dxf_file_new(struct DxfFile* dxf_file, char *path)
 	find_control_dots(dxf_file);
 	move(dxf_file);
 	create_polygon_jarvis(dxf_file);
-	aprox_rects(dxf_file);
 	gravity_center_in_polygon(dxf_file);
 }
 
@@ -327,43 +325,6 @@ static void create_polygon_jarvis(struct DxfFile *dxf_file)
 	points[n] = start_p;
 	n++;
 	dxf_file->polygon.n_points = n;
-}
-
-static void aprox_rects(struct DxfFile *dxf_file)
-{
-	int i, j, k, m, n, count;
-	
-	n = 0;
-	for (i = 0; i < dxf_file->n_primitives; i++)
-		n += dxf_file->n_controldots[i];
-
-	
-	count = 0;
-		
-	dxf_file->rects = (struct Rectangle*)malloc(sizeof(struct Rectangle) * (n - 1));
-	
-		for (i = 0; i < dxf_file->n_primitives; i++) {
-		for (k = 0; k < dxf_file->n_controldots[i] - 1; k++) {
-			double width, height, x, y, tmp, tmp1;
-
-			tmp = dxf_file->primitives[i].points[k].x;
-			tmp1 = dxf_file->primitives[i].points[k + 1].x;
-			x = (tmp < tmp1)? tmp : tmp1;
-			width = fabs(tmp - tmp1);
-
-			tmp = dxf_file->primitives[i].points[k].y;
-			tmp1 = dxf_file->primitives[i].points[k + 1].y;
-			y = (tmp < tmp1)? tmp : tmp1;
-			height = fabs(tmp - tmp1);
-			dxf_file->rects[count].x = x;
-			dxf_file->rects[count].y = y;
-			dxf_file->rects[count].width = width;
-			dxf_file->rects[count].height = height;
-			count++;
-		}
-
-		dxf_file->n_rects = n - 1;
-	}
 }
 
 static void gravity_center_in_polygon(struct DxfFile *dxf_file)
