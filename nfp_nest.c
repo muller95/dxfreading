@@ -16,6 +16,7 @@ struct Genration *generations;
 
 void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double width, double height);
 
+static int left_hole_nesting(struct DxfFile *dxf_files, struct Position *positions, int *how_many, int *max_position, int positioned, int f_count, double height);
 static void generate_first_generation(struct DxfFile *dxf_files, int f_count, double width, double height);
 static void rotate_polygon(struct DxfFile *dxf_file, double angle);
 static int dxf_cmp(const void *file1, const void *file2);
@@ -306,13 +307,80 @@ static int cross_check(struct DxfFile curr_file, struct DxfFile pos_file, struct
 	return 0;
 }
 
+static int left_hole_nesting(struct DxfFile *dxf_files, struct Position *positions, int *how_many, int *max_position, int positioned, int f_count, double height)
+{
+    int i, j;
+    for (i = 0; i < f_count;) {
+        int res, was_placed;
+        double y;
+        struct DxfFile curr_file;
 
+        if (how_many[i] == 0) {
+            i++;
+            continue;
+        }
+        
+        curr_file = filedup(dxf_files[i]);
+        was_placed = 0;
+        for (y = -1 * curr_file.m_height; y <= height - curr_file.m_height; y++) {
+        	double g_x, g_y;
+			for (j = 0; j < positioned; j++) {
+				int pos_ind;
+				struct DxfFile pos_file;
+				struct PointD offset, pos_offset;
 
+				pos_file = positions[j].file;
+					
+				offset.x = 0;
+				offset.y = y;			
+				pos_offset.x = positions[j].x;
+				pos_offset.y = positions[j].y;
+
+				res = cross_check(curr_file, pos_file, offset, pos_offset);
+				if (res == 1)  
+					break;
+			}
+			if (res == 1) 
+				break;
+						
+			if (y < 0)				
+				continue;
+		
+			g_x = curr_file.polygon.gravity_center.x + 0;
+			g_y = curr_file.polygon.gravity_center.y + y;		
+
+            was_placed = 1;
+			positions[positioned].file = curr_file;
+			positions[positioned].x = 0;
+			positions[positioned].y = y;             
+        }
+
+        if (!was_placed) {
+            i++;
+            continue;
+        }
+        
+        positioned++;
+		printf("hole positioned = %d n offset.x=%f offset.y=%f height=%f %s\n", positioned, positions[positioned-1].x,
+				positions[positioned-1].y, positions[positioned - 1].file.m_height, positions[positioned - 1].file.path);
+		if (positioned == *max_position) {					
+			*max_position *= 2;
+			positions = (struct Position*)realloc(positions, sizeof(struct Position) * (*max_position));
+		}
+
+		how_many[i]--;
+		if (how_many[i] == 0)
+			i++;
+
+    }
+
+    return positioned;
+}
 
 static void generate_first_generation(struct DxfFile *dxf_files, int f_count, double width, double height)
 {
 	int i, j, k, m; 
-	int can_place, max_position, positioned;
+	int max_position, positioned;
 	int *how_many;
 	double curr_height;
 	struct Position *positions;
@@ -327,16 +395,13 @@ static void generate_first_generation(struct DxfFile *dxf_files, int f_count, do
 		how_many[i] = 4;
 
 	positioned = 0;
-	can_place = 1;
 
 	for (i = 0; i < f_count;) {
-		int angle, angle_step;
 		int res, was_placed;
 		double min_length, x, y;
 		struct DxfFile curr_file;
 					
 		curr_file = filedup(dxf_files[i]);
-		angle_step = 15;
 		min_length = -1;
 	    
         was_placed = 0;
@@ -397,6 +462,10 @@ static void generate_first_generation(struct DxfFile *dxf_files, int f_count, do
         curr_height = (curr_height > positions[positioned].y + curr_file.y_max)? curr_height : positions[positioned].y + curr_file.y_max;
 
 		positioned++;
+
+        if (positioned == 1)
+            positioned = left_hole_nesting(dxf_files, positions, how_many, &max_position, positioned, f_count, height);
+            
 		printf("positioned = %d n offset.x=%f offset.y=%f height=%f %s\n", positioned, positions[positioned-1].x,
 				positions[positioned-1].y, positions[positioned - 1].file.m_height, positions[positioned - 1].file.path);
 		if (positioned == max_position) {					
