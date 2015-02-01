@@ -8,20 +8,24 @@
 struct Individ {
     int *genom;
     int genom_size;
-    double height;
+    double height, fitness;
 };
 
-int n_positioned;
-int max_individs, n_individs, max_genom;
-double min_height;
+static int n_positioned;
+static int max_individs, n_individs, max_genom;
+static double min_height;
 
 struct Individ *individs;
 
 void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double width, double height);
 
-static int calculate_individ_height(struct Individ individ, struct DxfFile *dataset, double width, double height);
+static int crossover();
+static int individs_equal(struct Individ individ1, struct Individ individ2);
+static int individs_cmp(const void *individ1, const void *individ2);
+static void calculate_fitness();
+static int calculate_individ_height(struct Individ individ, struct DxfFile *dataset, double width, double height, int draw);
 static struct DxfFile* generate_dataset(struct DxfFile *dxf_files, int f_count, int *dataset_size);
-static void mutate_individ(int n, int f_count);
+static void mutate_individ(int n, int genom_size);
 static int left_hole_nesting(struct DxfFile *dataset, struct Position *positions, int *max_position, int positioned, int dataset_size, double height);
 static void generate_first_individ(struct DxfFile *dataset, int dataset_size, double width, double height);
 static void rotate_polygon(struct DxfFile *dxf_file, double angle);
@@ -424,7 +428,7 @@ static void generate_first_individ(struct DxfFile *dataset, int dataset_size, do
 						
 				if (curr_file.y_max + y > height)				
 					continue;
-		
+
 				g_x = curr_file.polygon.gravity_center.x + x;
 				g_y = curr_file.polygon.gravity_center.y + y;
 				tmp_length  = sqrt(pow(g_x, 2) + pow(g_y, 2));			
@@ -466,7 +470,7 @@ static void generate_first_individ(struct DxfFile *dataset, int dataset_size, do
 			positions = (struct Position*)realloc(positions, sizeof(struct Position) * max_position);
 		}
 
-        curr_height = (curr_height > positions[positioned].y + curr_file.y_max)? curr_height : positions[positioned].y + curr_file.y_max;
+        curr_height = (curr_height > positions[positioned - 1].y + curr_file.y_max)? curr_height : positions[positioned - 1].y + curr_file.y_max;
 	}
 
     min_height = (min_height < curr_height)? min_height : curr_height;
@@ -478,14 +482,17 @@ static void generate_first_individ(struct DxfFile *dataset, int dataset_size, do
 	n_positioned = positioned;
 }
 
-static void mutate_individ(int n, int dataset_size)
+static void mutate_individ(int n, int genom_size)
 {
     int n1, n2, c, i;
     
     srand(time(NULL));
 
-    n1 = (int)rand() % (dataset_size);
-    n2 = (int)rand() % (dataset_size);
+    n1 = (int)rand() % (genom_size);
+    n2 = (int)rand() % (genom_size);
+
+    while (n1 == n2) 
+        n2 = (int)rand() % (genom_size);
     
     individs[n_individs].genom = (int*)malloc(sizeof(int) * max_genom);
     individs[n_individs].genom_size = individs[n].genom_size;
@@ -494,13 +501,14 @@ static void mutate_individ(int n, int dataset_size)
     for (i = 0; i < individs[n].genom_size; i++)
         individs[n_individs].genom[i] = individs[n].genom[i];
 
+    c = individs[n].genom[n1];
+    individs[n_individs].genom[n1] = individs[n].genom[n2];
+    individs[n_individs].genom[n2] = c;
+
     n_individs++;
     if (n_individs == max_individs)
         individs = (struct Individ*)realloc(individs, sizeof(struct Individ) * max_individs);
 
-    c = individs[n].genom[n1];
-    individs[n].genom[n1] = individs[n].genom[n2];
-    individs[n].genom[n2] = c;
 }
 
 static struct DxfFile* generate_dataset(struct DxfFile *dxf_files, int f_count, int *dataset_size)
@@ -522,7 +530,7 @@ static struct DxfFile* generate_dataset(struct DxfFile *dxf_files, int f_count, 
     return dataset;
 }
 
-static int calculate_individ_height(struct Individ individ, struct DxfFile *dataset, double width, double height)
+static int calculate_individ_height(struct Individ individ, struct DxfFile *dataset, double width, double height, int draw)
 {
 	int i, j, k, m, genom_size; 
 	int max_position, positioned;
@@ -534,9 +542,6 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
 	positions = (struct Position*)malloc(sizeof(struct Position) * max_position);
 	
     curr_height = 0;
-
-    individs[0].genom = (int*)malloc(sizeof(int) * max_genom);
-    individs[0].genom_size = 0;
 
 	positioned = 0;
     
@@ -578,7 +583,7 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
 	    			if (res == 1) 
     					break;
 						
-				    if (curr_file.y_max + y > height)				
+				    if (curr_file.y_max + y > height) 		
 			    		continue;
 		
 		    		g_x = curr_file.polygon.gravity_center.x + x;
@@ -599,7 +604,7 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
 		    			positions[positioned].y = y;
 	    			}
                 
-                  if (y == 0) {
+                    if (y == 0) {
                         x = width;
                         break;
                     }
@@ -618,25 +623,156 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
 			positions = (struct Position*)realloc(positions, sizeof(struct Position) * max_position);
 		}
 
-        curr_height = (curr_height > positions[positioned].y + curr_file.y_max)? curr_height : positions[positioned].y + curr_file.y_max;
+        if (curr_height < positions[positioned - 1].file.y_max + positions[positioned - 1].y);
+            curr_height = positions[positioned - 1].file.y_max + positions[positioned - 1].y;
+
 	}
 
     min_height = (min_height < curr_height)? min_height : curr_height;
 	
 	printf("positioned = %d genom_szie=%d \n", positioned, individ.genom_size);
 	n_positioned = positioned;
-    draw_nested(positions);
+    
+    if (draw)
+        draw_nested(positions);
 
     return curr_height;
+}
+
+static void calculate_fitness()
+{
+    int i;
+    double avg;
+    
+    avg = 0.0;
+    for (i = 0; i < n_individs; i++)
+        avg += individs[i].height;
+
+    avg /= n_individs;
+
+    for (i = 0; i < n_individs; i++) {
+        double alpha, beta, sigma;
+        alpha = avg / (avg - min_height);
+        beta = (-1) * min_height * avg / (avg - min_height);
+        sigma = avg;
+        individs[i].fitness = alpha * individs[i].height + beta + sigma;
+    }
+}
+
+static int individs_cmp(const void *indiv1, const void *indiv2)
+{
+    struct Individ *individ1, *individ2;
+
+    individ1 = (struct Individ*)indiv1;
+    individ2 = (struct Individ*)indiv2;
+
+    if (individ1->fitness > individ2->fitness) 
+        return 1;
+    if (individ1->fitness < individ2->fitness)
+        return -1;
+    else
+        return 0;
+}
+
+static int individs_equal(struct Individ individ1, struct Individ individ2)
+{
+    int i, equal;
+    
+    equal = 1;
+    for (i = 0; i < individ1.genom_size; i++) {
+        equal = (individ1.genom[i] == individ2.genom[i])? 1 : 0;
+        if (!equal)
+            break;
+    }
+
+    return equal;
+}
+
+static int crossover()
+{
+    int i, j, count, equal, res;
+    int g1, g2, i1, i2;
+
+    res = 0;
+
+    i1 = 0;
+    i2 = 1;
+
+    individs[n_individs].genom = (int*)malloc(sizeof(int) * individs[i1].genom_size);
+    individs[n_individs].genom_size = individs[i1].genom_size;
+
+    srand(time(NULL));
+    g1 = (int)rand % (individs[i1].genom_size - 1);
+    g2 = g1 + 1;;
+
+    individs[n_individs].genom[g1] = individs[i1].genom[g1];
+    individs[n_individs].genom[g2] = individs[i1].genom[g2];
+    
+    count = 0;
+    for (i = 0; i < individs[i1].genom_size; i++) {
+        if (count == g1 || count == g2)
+            continue;
+
+        if (individs[i2].genom[i] == individs[i1].genom[g1] || individs[i2].genom[i] == individs[i1].genom[g2])
+            continue;
+
+        individs[n_individs].genom[count] = individs[i2].genom[i];
+        count++;
+    }
+
+    equal = 0;
+    for (i = 0; i < n_individs; i++) {
+        equal = individs_equal(individs[i], individs[n_individs]);
+
+        if (equal)
+            break;
+    }
+
+    if (!equal) {
+        res += 1;
+        n_individs++;
+        individs[n_individs].genom = (int*)malloc(sizeof(int) * individs[i1].genom_size);
+        individs[n_individs].genom_size = individs[i1].genom_size;
+    }   
+
+    individs[n_individs].genom[g1] = individs[i2].genom[g1];
+    individs[n_individs].genom[g2] = individs[i2].genom[g2]; 
+    
+    count = 0;
+    for (i = 0; i < individs[i2].genom_size; i++) {
+        if (count == g1 || count == g2)
+            continue;
+
+        if (individs[i1].genom[i] == individs[i2].genom[g1] || individs[i1].genom[i] == individs[i2].genom[g2])
+            continue;
+        individs[n_individs].genom[count] = individs[i1].genom[i];
+        count++;
+    }
+
+    equal = 0;
+    for (i = 0; i < n_individs; i++) {
+        equal = individs_equal(individs[i], individs[n_individs]);
+
+        if (equal)
+            break;
+    }
+
+    if (!equal) {
+        res += 1;
+        n_individs += 1;
+    }
+
+   return res;
+  
 }
 
 void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double width, double height)
 {
     int i, j, dataset_size;
     struct DxfFile *dataset;
-
+    printf("box_height=%f\n", height);
     min_height = height;
-    max_individs = 64;
+    max_individs = 256;
     n_individs = 0;
 
     individs = (struct Individ*)malloc(sizeof(struct Individ) * max_individs);
@@ -646,11 +782,57 @@ void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double width, dou
     
     generate_first_individ(dataset, dataset_size, width, height);
     
-    for (i = 0; i < 10; i++)
-        mutate_individ(0, f_count);
-    
-    for (i = 1; i < n_individs; i++) {
-        printf("\n");
-        individs[i].height = calculate_individ_height(individs[i], dataset, width, height);
+    for (i = 0; i < 1; i++) {
+        mutate_individ(0, individs[0].genom_size);
+        for (j = 0; j < n_individs - 1; j++) {
+            if (individs_equal(individs[j], individs[n_individs - 1])) {
+                i--;
+                n_individs--;
+                break;
+            }
+        }
     }
+
+    for (i = 1; i < n_individs; i++) {
+        individs[i].height = calculate_individ_height(individs[i], dataset, width, height, 0);
+    }
+    
+    printf("\n\n");
+    printf("min_height=%f\n", min_height);
+    for (i = 0; i < 30; i++) {
+        int res;
+        calculate_fitness();
+        qsort(individs, n_individs, sizeof(struct Individ), individs_cmp);
+        for (j = 0; j < n_individs; j++) {
+            printf("height=%f fitness=%f\n", individs[j].height, individs[j].fitness);
+        }
+        printf("\n");
+        
+        res = crossover();
+        
+        if (res == 0) {
+            printf("ALERT CROSSOVER \n");
+            int equal = 1;
+            while (equal) {
+                mutate_individ(n_individs / 2, individs[n_individs / 2].genom_size);
+                for (j = 0; j < n_individs - 1; j++) {
+                    equal = individs_equal(individs[j], individs[n_individs - 1]);
+                    if (equal) {
+                        n_individs--;
+                        break;
+                    } else {
+                        res = 1;
+                    }
+                }
+            }
+        }
+
+        individs[n_individs - 1].height = calculate_individ_height(individs[n_individs - 1], dataset, width, height, 0);
+        if (res == 2)
+            individs[n_individs - 2].height = calculate_individ_height(individs[n_individs - 2], dataset, width, height, 0);
+    }
+
+    qsort(individs, n_individs, sizeof(struct Individ), individs_cmp);
+    printf("\n\n\n\n RESULT MIN_HEIGHT=%f FITNESS=%f\n", individs[0].height, individs[0].fitness);
+    calculate_individ_height(individs[0], dataset, width, height, 1);
 }
