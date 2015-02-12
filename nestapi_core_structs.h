@@ -47,3 +47,14 @@ struct Position {
 struct Level {
 	double from_x, to_x, y;
 };
+
+struct Individ {
+    int *genom;
+    int genom_size;
+    double height, fitness;
+};
+
+struct NfpPoint {
+    struct PointD point;
+    struct NfpPoint *next;
+};
