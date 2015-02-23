@@ -31,7 +31,8 @@ struct DxfFile {
 	struct TextPrimitive *text_primitives;
 	struct DxfPrimitive *primitives;
 	struct Polygon polygon;
-	int n_primitives, n_types; 
+	int n_primitives, n_types;
+    int how_many; 
 	int max_types, max_lines; 
 	int *n_controldots, *str_count, *types;
 	double m_height, m_width; 
@@ -52,9 +53,4 @@ struct Individ {
     int *genom;
     int genom_size;
     double height, fitness;
-};
-
-struct NfpPoint {
-    struct PointD point;
-    struct NfpPoint *next;
 };

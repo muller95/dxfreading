@@ -7,7 +7,8 @@
 
 #define MAX_LINE_LENGTH 2048
 
-void dxf_file_new(struct DxfFile* dxf_file, char *path);
+void dxf_file_new(struct DxfFile* dxf_file, char *path, int quant);
+int test_function();
 
 static void read_entity(struct DxfFile *dxf_file);
 static void prepare_to_read(char *path, struct DxfFile *dxf_file);
@@ -15,12 +16,18 @@ static void find_control_dots(struct DxfFile *dxf_file);
 static int is_new_figure(char *line, struct DxfFile *dxf_file, int curr_prim);
 static int is_new_figure2(char *line, struct DxfFile *dxf_file);
 
-void dxf_file_new(struct DxfFile* dxf_file, char *path)
+int test_function()
+{
+    return 322;
+}
+
+void dxf_file_new(struct DxfFile* dxf_file, char *path, int quant)
 {
 	int i;
 
 	dxf_file->path = path;
 	dxf_file->n_primitives = 0;
+    dxf_file->how_many = quant;
 	dxf_file->n_types = 0;
 	dxf_file->max_types = 0;
 	dxf_file->max_lines = 0;	

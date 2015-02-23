@@ -8,11 +8,12 @@ GtkListStore *list_store;
 struct DxfFile *dxf_files;
 char **f_names;
 int max_files = 128, f_count = 0;
+int quant_files = 4;
 
 enum {
 	COLUMN_ITEM_NUMBER,
-	COLOMN_ITEM_PATH,
-	NUM_ITEM_COLUMNS,
+	COLUMN_ITEM_PATH,
+	COLUMN_ITEM_QUANT
 };
 
 void on_window_destroy(GtkWidget *widget, gpointer user_data)
@@ -162,7 +163,7 @@ void on_subitem_open_click (GtkWidget *widget, gpointer user_data)
         
 	    	f_names[f_count] = filename;
          
-	    	dxf_file_new(&dxf_file, filename);
+	    	dxf_file_new(&dxf_file, filename, quant_files);
 	    	dxf_files[f_count] = dxf_file;
 	    	f_count++;
 	    	if (f_count == max_files) {
@@ -173,7 +174,7 @@ void on_subitem_open_click (GtkWidget *widget, gpointer user_data)
     
 	    	}
 	    	gtk_list_store_append(list_store, &iter);
-    		gtk_list_store_set(list_store, &iter, COLUMN_ITEM_NUMBER, f_count, COLOMN_ITEM_PATH, f_names[f_count - 1], -1);
+    		gtk_list_store_set(list_store, &iter, COLUMN_ITEM_NUMBER, f_count, COLUMN_ITEM_PATH, f_names[f_count - 1], COLUMN_ITEM_QUANT, quant_files, -1);
             filenames_list = filenames_list->next;
         }
 	}
@@ -185,6 +186,33 @@ void on_selection_changed(GtkWidget *widget, gpointer user_data)
 	int i;
 	for (i = 0; i < f_count; i++)
 		show_dxf_file(&dxf_files[i]);
+}
+
+void cell_edited_callback(GtkCellRendererText *cell, char *path_string, char *new_text, gpointer user_data)
+{
+    GtkTreeModel *model;
+    GtkTreePath *path;
+    GtkTreeIter iter;
+    int column, num, quant;
+    char *old;
+
+    model = GTK_TREE_MODEL(list_store);
+    path = gtk_tree_path_new_from_string(path_string);
+    column = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(cell), "column"));
+    gtk_tree_model_get_iter(model, &iter, path);
+
+    switch (column) {
+        case COLUMN_ITEM_QUANT: 
+            gtk_tree_model_get(model, &iter, COLUMN_ITEM_NUMBER, &num, -1);
+            gtk_tree_model_get(model, &iter, column, &quant, -1);
+
+            if (atoi(new_text) > 0) {
+                gtk_list_store_set(list_store, &iter, column, atoi(new_text), -1);
+                dxf_files[num - 1].how_many = atoi(new_text);
+            }
+
+            break;
+    }
 }
 
 int main (int argc, char *argv[])
@@ -233,14 +261,31 @@ int main (int argc, char *argv[])
 	scroll_window = gtk_scrolled_window_new(NULL, NULL);
 	gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(scroll_window), GTK_SHADOW_ETCHED_IN);
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll_window), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-	list_store = gtk_list_store_new(2, G_TYPE_INT, G_TYPE_STRING);
+
+	list_store = gtk_list_store_new(3, G_TYPE_INT, G_TYPE_STRING, G_TYPE_INT);
 	flist = gtk_tree_view_new_with_model(GTK_TREE_MODEL(list_store));	
 	gtk_tree_view_set_rules_hint(GTK_TREE_VIEW(flist), 1);
 	gtk_tree_selection_set_mode (gtk_tree_view_get_selection(GTK_TREE_VIEW (flist)), GTK_SELECTION_SINGLE);
-	renderer = gtk_cell_renderer_combo_new();
+
+	renderer = gtk_cell_renderer_text_new();
+    g_object_set(renderer, "editable", TRUE, NULL);
+    g_signal_connect(renderer, "edited", G_CALLBACK(cell_edited_callback), NULL);
+    g_object_set_data(G_OBJECT(renderer), "column", GINT_TO_POINTER(COLUMN_ITEM_NUMBER));
 	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(flist), -1, "Number", renderer, "text", COLUMN_ITEM_NUMBER, NULL);
-	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(flist), -2, "File", renderer, "text", COLOMN_ITEM_PATH, NULL);
-	gtk_box_pack_start(GTK_BOX(v_box), scroll_window, 1, 1, 0);
+
+    renderer = gtk_cell_renderer_text_new();
+    g_object_set(renderer, "editable", TRUE, NULL);
+    g_signal_connect(renderer, "edited", G_CALLBACK(cell_edited_callback), NULL);
+    g_object_set_data(G_OBJECT(renderer), "column", GINT_TO_POINTER(COLUMN_ITEM_PATH));
+	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(flist), -2, "File", renderer, "text", COLUMN_ITEM_PATH, NULL);
+
+    renderer = gtk_cell_renderer_text_new();
+    g_object_set(renderer, "editable", TRUE, NULL);
+    g_signal_connect(renderer, "edited", G_CALLBACK(cell_edited_callback), NULL);
+    g_object_set_data(G_OBJECT(renderer), "column", GINT_TO_POINTER(COLUMN_ITEM_QUANT));
+    gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(flist), -3, "Quantity", renderer, "text", COLUMN_ITEM_QUANT, NULL);
+
+	gtk_box_pack_start(GTK_BOX(v_box), scroll_window, TRUE, TRUE, FALSE);
 	gtk_container_add (GTK_CONTAINER (scroll_window), flist);
 	
 	//connect selection changed signal

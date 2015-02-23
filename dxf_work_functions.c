@@ -8,6 +8,7 @@ struct DxfFile filedup(struct DxfFile source)
     struct DxfFile dest;
     
     dest.path = strdup(source.path);
+    dest.how_many = source.how_many;
     dest.n_primitives = source.n_primitives;
     dest.n_controldots = (int*)malloc(sizeof(int) * source.n_primitives);
     dest.primitives = (struct DxfPrimitive*)malloc(sizeof(struct DxfPrimitive) * source.n_primitives);

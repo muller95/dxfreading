@@ -6,27 +6,26 @@
 #include "dxf_work_functions.h"
 #include "dxf_geometry.h"
 #include "cross_check_funcs.h"
-#include "nfp_insert_funcs.h"
 
-static int n_positioned;
+static int n_positioned, was_placed;
 static int max_individs, n_individs, max_genom;
-static double min_height;
+static double min_height, width, height;
+static int **mask;
 
 struct Individ *individs;
-struct NfpPoint *head;
 
-void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double width, double height);
+void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double w, double h);
 
-static void init_nfp(double width, double height);
+static void recursive_move_x(double *x_pos, double *y_pos, double *min_length, struct DxfFile *curr_file, struct Position *positions, int positioned);
 static int crossover();
 static int individs_equal(struct Individ individ1, struct Individ individ2);
 static int individs_cmp(const void *individ1, const void *individ2);
 static void calculate_fitness();
-static int calculate_individ_height(struct Individ individ, struct DxfFile *dataset, double width, double height, int draw);
+static int calculate_individ_height(struct Individ individ, struct DxfFile *dataset, int draw);
 static struct DxfFile* generate_dataset(struct DxfFile *dxf_files, int f_count, int *dataset_size);
 static void mutate_individ(int n, int genom_size);
-static int left_hole_nesting(struct DxfFile *dataset, struct Position *positions, int *max_position, int positioned, int dataset_size, double height);
-static void generate_first_individ(struct DxfFile *dataset, int dataset_size, double width, double height);
+static int left_hole_nesting(struct DxfFile *dataset, struct Position *positions, int *max_position, int positioned, int dataset_size);
+static void generate_first_individ(struct DxfFile *dataset, int dataset_size);
 static int dxf_cmp(const void *file1, const void *file2);
 
 static gboolean on_draw_nested_signal(GtkWidget *widget, cairo_t *cr, gpointer user_data)
@@ -153,8 +152,144 @@ static int dxf_cmp(const void *file1, const void *file2)
 		return 0;
 }
 
+static int left_hole_nesting(struct DxfFile *dataset, struct Position *positions, int *max_position, int positioned, int dataset_size)
+{
+    int i, j, genom_size;
+    for (i = 0; i < dataset_size; i++) {
+        int res;
+        double y;
+        struct DxfFile curr_file;
+        
+        curr_file = filedup(dataset[i]);
+        was_placed = 0;
+        for (y = -1 * curr_file.m_height; y <= height - curr_file.m_height; y++) {
+        	double g_x, g_y;
+			for (j = 0; j < positioned; j++) {
+				int pos_ind;
+				struct DxfFile pos_file;
+				struct PointD offset, pos_offset;
+                
+				pos_file = positions[j].file;
+					
+				offset.x = 0;
+				offset.y = y;			
+				pos_offset.x = positions[j].x;
+				pos_offset.y = positions[j].y;
 
-static void generate_first_individ(struct DxfFile *dataset, int dataset_size, double width, double height)
+				res = cross_check(curr_file, pos_file, offset, pos_offset);
+				if (res == 1)  
+					break;
+			}
+			if (res == 1) 
+				break;
+						
+			if (y < 0)				
+				continue;
+		
+			g_x = curr_file.polygon.gravity_center.x + 0;
+			g_y = curr_file.polygon.gravity_center.y + y;		
+
+            was_placed = 1;
+			positions[positioned].file = curr_file;
+			positions[positioned].x = 0;
+			positions[positioned].y = y;             
+        }
+
+        if (!was_placed)
+            continue;
+
+        genom_size = individs[0].genom_size;
+        individs[0].genom[genom_size] = i;
+        individs[0].genom_size += 1;
+
+        positioned++;
+		printf("hole positioned = %d %s\n", positioned, positions[positioned - 1].file.path);
+		if (positioned == *max_position) {					
+			*max_position *= 2;
+			positions = (struct Position*)realloc(positions, sizeof(struct Position) * (*max_position));
+		}
+    }
+
+    return positioned;
+}
+
+static void init_mask(int w, int h)
+{
+    int i;
+
+    mask = (int**)malloc(sizeof(int*) * (h * 2));
+
+    for (i = 0; i < h * 2; i++) 
+        mask[i] = (int*)calloc(w * 2, sizeof(int));
+}
+
+static void free_mask(int **mask, int w, int h)
+{
+    int i;
+
+    /*for (i = 0; i < height * 2; i++)
+        free(mask[i]);*/
+
+  //  free(mask);
+}
+
+static void recursive_move_x(double *x_pos, double *y_pos, double *min_length, struct DxfFile *curr_file, struct Position *positions, int positioned)
+{
+    int j;
+    double x, y;
+    y = *y_pos;
+
+    for (x = *x_pos; x >= 0; x -= 1.0) {
+        int res;
+        double g_x, g_y, tmp_length;
+        mask[(int)x][(int)y] = 1;
+        for (j = 0; j < positioned; j++) {
+            int pos_ind;
+	    	struct DxfFile pos_file;
+		    struct PointD offset, pos_offset;
+
+			pos_file = positions[j].file;
+				    	
+			offset.x = x;
+			offset.y = y;			
+			pos_offset.x = positions[j].x;
+			pos_offset.y = positions[j].y;
+
+			res = cross_check(*curr_file, pos_file, offset, pos_offset);
+			if (res == 1)  
+			   	break;
+        }
+
+        if (res == 1) 
+		 	break;
+
+        *x_pos = x;
+
+		if (curr_file->y_max + y > height)				
+			continue;
+
+		g_x = curr_file->polygon.gravity_center.x + *x_pos;
+		g_y = curr_file->polygon.gravity_center.y + *y_pos;
+		tmp_length  = sqrt(pow(g_x, 2) + pow(g_y, 2));
+                			
+        if (*x_pos + curr_file->x_max > width)
+            continue;
+
+		if (*min_length == -1 || tmp_length < *min_length) {
+            was_placed = 1;
+    		*min_length = tmp_length;
+    		positions[positioned].file = *curr_file;
+			positions[positioned].x = *x_pos;
+			positions[positioned].y = y;
+		} else if (tmp_length == *min_length && positions[positioned].y > y) {
+			positions[positioned].file = *curr_file;
+			positions[positioned].x = *x_pos;
+			positions[positioned].y = y;
+		}
+    }           
+}
+
+static void generate_first_individ(struct DxfFile *dataset, int dataset_size)
 {
 	int i, j, k, m, genom_size; 
 	int max_position, positioned;
@@ -172,140 +307,93 @@ static void generate_first_individ(struct DxfFile *dataset, int dataset_size, do
 	positioned = 0;
 
 	for (i = 0; i < dataset_size; i++) {
-		int res, was_placed;
-        struct NfpPoint *curr, *next;
-		double min_length;
-        struct PointD min_offset;
+		int res;
+		double min_length, x, y;
 		struct DxfFile curr_file;
 					
 		curr_file = filedup(dataset[i]);
 		min_length = -1;
-	    was_placed = 0;
-        
-        curr = head;
-        next = curr->next;
-        while(curr->next != NULL) {
-            struct PointD move_vector, start, end;
-             
-            start = curr->point;
-            end = next->point;
-            
-       //     printf("start x=%f y=%f\n", start.x, start.y);
-
-            curr = next;
-            next = next->next;
-            
-            move_vector.x = end.x - start.x;
-            move_vector.y = end.y - start.y;
-
-            if (fabs(move_vector.x) > fabs(move_vector.y) & fabs(move_vector.x) > 1.0) {
-                move_vector.y /= fabs(move_vector.x);
-                move_vector.x /= fabs(move_vector.x);
-            } else if (fabs(move_vector.y) > fabs(move_vector.x) && fabs(move_vector.y) > 1.0) {
-                move_vector.x /= fabs(move_vector.y);
-                move_vector.y /= fabs(move_vector.y);
-            }
-
-            for (k = 0; k < curr_file.polygon.n_points; k++) {
-                double g_x, g_y, tmp_length;
-                int flag;      
-                struct PointD offset, ref_p;
+	    
+        was_placed = 0;
+        init_mask((int)width, (int)height);
+		for (x = 0.0; x < width; x += 1.0) {
+			res = 0;
+			for (y = trunc(curr_height + 1.0); y >= 0; y -= 1.0) {
+				double g_x, g_y, tmp_length, x_pos, y_pos;
+                int xi, yi;
                 
-                ref_p = curr_file.polygon.points[k];
+                xi = (int)x;
+                yi = (int)y;
+               // printf("xi=%d yi=%d c=%d\n", xi, yi, mask[0][0]);
+                mask[xi][yi] = 1;
+				for (j = 0; j < positioned; j++) {
+					int pos_ind;
+					struct DxfFile pos_file;
+					struct PointD offset, pos_offset;
 
-                offset.x = start.x - ref_p.x;
-                offset.y = start.y - ref_p.y;
+					pos_file = positions[j].file;
+					
+					offset.x = x;
+					offset.y = y;			
+					pos_offset.x = positions[j].x;
+					pos_offset.y = positions[j].y;
 
-                ref_p.x += offset.x;
-                ref_p.y += offset.y;
-                flag = 1;
-                while (flag) {
-                    if (fabs(ref_p.x - end.x) <= 0.00001 && fabs(ref_p.y - end.y) <= 0.00001)
-                        flag = 0;
-                     
- 
-                        
-                    if (offset.x < 0 || offset.y < 0) {
-                        offset.x += move_vector.x;
-                        offset.y += move_vector.y;
-                        ref_p.x += move_vector.x;
-                        ref_p.y += move_vector.y;
-                        continue;
-                    }
+					res = cross_check(curr_file, pos_file, offset, pos_offset);
+					if (res == 1)  
+						break;
+				}
+				if (res == 1) 
+					break;
+                
+                x_pos = x;
+                y_pos = y;
 
-                    if (curr_file.y_max + offset.x >= width || curr_file.y_max + offset.y >= height) {
-                        offset.x += move_vector.x;
-                        offset.y += move_vector.y;
-                        ref_p.x += move_vector.x;
-                        ref_p.y += move_vector.y;
-                        if (ref_p.x == end.x && ref_p.y == end.y)
-                            flag = 0;
-                        continue;
-                    }
-                    
-                    if (cross_check_nfp(curr_file, offset, head)) {
-                        offset.x += move_vector.x;
-                        offset.y += move_vector.y; 
-                        ref_p.x += move_vector.x;
-                        ref_p.y += move_vector.y;
-                        continue;
-                    }
+                if (x_pos - 1.0 >= 0 && mask[(int)(x_pos - 1.0)][(int)(y_pos - 1.0)] != 1)
+                    recursive_move_x(&x_pos, &y_pos, &min_length, &curr_file, positions, positioned);
+                    	
+				if (curr_file.y_max + y > height)				
+					continue;
 
-                    if (out_of_nfp(curr_file, head, offset, width)) {
-                        offset.x += move_vector.x;
-                        offset.y += move_vector.y; 
-                        ref_p.x += move_vector.x;
-                        ref_p.y += move_vector.y;
-                        continue;
-                    }
+				g_x = curr_file.polygon.gravity_center.x + x_pos;
+				g_y = curr_file.polygon.gravity_center.y + y;
+				tmp_length  = sqrt(pow(g_x, 2) + pow(g_y, 2));
+                			
+                if (x_pos + curr_file.x_max > width)
+                    continue;
 
-                    g_x = curr_file.polygon.gravity_center.x + offset.x;
-				    g_y = curr_file.polygon.gravity_center.y + offset.y;
-    				tmp_length  = sqrt(pow(g_x, 2) + pow(g_y, 2));			
-
-	    			if (min_length == -1 || tmp_length < min_length) {
-                        was_placed = 1;
-			    		min_length = tmp_length;
-                        min_offset.x = offset.x;
-                        min_offset.y = offset.y;
-				    	positions[positioned].file = curr_file;
-					    positions[positioned].x = offset.x;
-    					positions[positioned].y = offset.y;
-	    			} else if (tmp_length == min_length && positions[positioned].y > offset.y) {
-		    			min_offset.x = offset.x;
-                        min_offset.y = offset.y;
-                        positions[positioned].file = curr_file;
-			    		positions[positioned].x = offset.x;
-				    	positions[positioned].y = offset.y;
-    				}
-                    
-                //    printf("x=%f y=%f end.x=%d end.y=%f\n", ref_p.x, ref_p.y, end.x, end.y);
-                 //   getchar();
-                    
-                    offset.x += move_vector.x;
-                    offset.y += move_vector.y;
-                    ref_p.x +=  move_vector.x;
-                    ref_p.y += move_vector.y;
+				if (min_length == -1 || tmp_length < min_length) {
+                    was_placed = 1;
+					min_length = tmp_length;
+					positions[positioned].file = curr_file;
+					positions[positioned].x = x_pos;
+					positions[positioned].y = y;
+				} else if (tmp_length == min_length && positions[positioned].y > y) {
+					positions[positioned].file = curr_file;
+					positions[positioned].x = x_pos;
+					positions[positioned].y = y;
+				}
+                
+                if (y == 0) {
+                    x = width * 2;
+                    break;
                 }
-            }
-        }
-
+			}
+		}
+        
+      //  free_mask(mask, (int)width, (int)height);
         if (!was_placed) 
             continue;
-            
-        min_offset.x = positions[positioned].x;
-        min_offset.y = positions[positioned].y;
+
 		positioned++;
-        n_positioned = positioned; 
-      //  if (positioned == 1)
-        //    positioned = left_hole_nesting(dataset, positions, &max_position, positioned, dataset_size, height);
+
+        if (positioned == 1)
+            positioned = left_hole_nesting(dataset, positions, &max_position, positioned, dataset_size);
 
         genom_size = individs[0].genom_size;
-
-           
+        individs[0].genom[genom_size] = i;
+        individs[0].genom_size += 1;
+            
 		printf("positioned = %d n %s\n", positioned, positions[positioned - 1].file.path);
-       
-        update_nfp(curr_file, head, min_offset);
 		if (positioned == max_position) {					
 			max_position *= 2;
 			positions = (struct Position*)realloc(positions, sizeof(struct Position) * max_position);
@@ -325,24 +413,168 @@ static void generate_first_individ(struct DxfFile *dataset, int dataset_size, do
     draw_nested(positions);
 }
 
+static void mutate_individ(int n, int genom_size)
+{
+    int n1, n2, c, i;
+    
+    srand(time(NULL));
+
+    n1 = (int)rand() % (genom_size);
+    n2 = (int)rand() % (genom_size);
+
+    while (n1 == n2) 
+        n2 = (int)rand() % (genom_size);
+    
+    individs[n_individs].genom = (int*)malloc(sizeof(int) * max_genom);
+    individs[n_individs].genom_size = individs[n].genom_size;
+    individs[n_individs].height = -1;
+
+    for (i = 0; i < individs[n].genom_size; i++)
+        individs[n_individs].genom[i] = individs[n].genom[i];
+
+    c = individs[n].genom[n1];
+    individs[n_individs].genom[n1] = individs[n].genom[n2];
+    individs[n_individs].genom[n2] = c;
+
+    n_individs++;
+    if (n_individs == max_individs)
+        individs = (struct Individ*)realloc(individs, sizeof(struct Individ) * max_individs);
+
+}
+
 static struct DxfFile* generate_dataset(struct DxfFile *dxf_files, int f_count, int *dataset_size)
 {
     int i, j, k;
-    int size, n_files;
+    int size;
     struct DxfFile *dataset;
-    
-    n_files = 2;
-    size = n_files * f_count;
+
+    size = 0;
+    for (i = 0; i < f_count; i++) {
+        size += dxf_files[i].how_many;
+    }
+
     *dataset_size = size;
     dataset = (struct DxfFile*)malloc(sizeof(struct DxfFile) * size); 
     
     for (i = 0, k = 0; i < f_count; i++) {
-        for (j = 0; j < n_files; j++, k++) {
+        for (j = 0; j < dxf_files[i].how_many; j++, k++) {
             dataset[k] = filedup(dxf_files[i]);
         }
     }
 
     return dataset;
+}
+
+static int calculate_individ_height(struct Individ individ, struct DxfFile *dataset, int draw)
+{
+	int i, j, k, m, genom_size; 
+	int max_position, positioned;
+	double curr_height;
+    double angle_step;
+	struct Position *positions;
+	
+	max_position = individ.genom_size;
+	positions = (struct Position*)malloc(sizeof(struct Position) * max_position);
+	
+    curr_height = 0;
+
+	positioned = 0;
+    
+    angle_step = 30;
+	for (i = 0; i < individ.genom_size; i++) {
+		int res, index;
+		double min_length, x, y, angle, min_angle;
+		struct DxfFile curr_file;
+					
+        index = individ.genom[i];
+		min_length = -1;
+	    
+        was_placed = 0;
+        for (angle = 0.0; angle < 360; angle += angle_step) {
+           // printf("i=%d index=%d\n", i, index);
+            curr_file = filedup(dataset[index]);
+            if (angle > 0) 
+                rotate_polygon(&curr_file, angle);
+           
+	    	for (x = 0.0; x < width - curr_file.m_width ; x += 1.0) {
+	    		res = 0;
+    			for (y = height + curr_file.m_height; y >= 0; y -= 1.0) {
+			    	double g_x, g_y, tmp_length;
+		    		for (j = 0; j < positioned; j++) {
+		    			int pos_ind;
+	    				struct DxfFile pos_file;
+    					struct PointD offset, pos_offset;
+
+				    	pos_file = positions[j].file;
+					
+			    		offset.x = x;
+		    			offset.y = y;			
+	    				pos_offset.x = positions[j].x;
+    					pos_offset.y = positions[j].y;
+
+					    res = cross_check(curr_file, pos_file, offset, pos_offset);
+				    	if (res == 1)  
+			    			break;
+		    		}
+	    			if (res == 1) 
+    					break;
+						
+				    if (curr_file.y_max + y > height) 		
+			    		continue;
+		
+		    		g_x = curr_file.polygon.gravity_center.x + x;
+	    			g_y = curr_file.polygon.gravity_center.y + y;
+    				tmp_length  = sqrt(pow(g_x, 2) + pow(g_y, 2));			
+
+	    			if (min_length == -1 || tmp_length < min_length) {
+                        was_placed = 1;
+                        min_angle = angle;
+				    	min_length = tmp_length;
+			    		positions[positioned].file = curr_file;
+		    			positions[positioned].x = x;
+	    				positions[positioned].y = y;
+    				} else if (tmp_length == min_length && positions[positioned].y > y) {
+                        min_angle = angle;
+				    	positions[positioned].file = curr_file;
+			    		positions[positioned].x = x;
+		    			positions[positioned].y = y;
+	    			}
+                
+                    if (y == 0) {
+                        x = width;
+                        break;
+                    }
+	    		}
+    		}
+        }
+
+        if (!was_placed) 
+            continue;
+
+		positioned++;
+            
+		printf("positioned = %d angle=%f %s\n", positioned, min_angle, positions[positioned - 1].file.path);
+		if (positioned == max_position) {					
+			max_position *= 2;
+			positions = (struct Position*)realloc(positions, sizeof(struct Position) * max_position);
+		}
+
+        if (curr_height < positions[positioned - 1].file.y_max + positions[positioned - 1].y);
+            curr_height = positions[positioned - 1].file.y_max + positions[positioned - 1].y;
+
+	}
+    
+    if (positioned < individ.genom_size) 
+        curr_height = height * 2;
+    min_height = (min_height < curr_height)? min_height : curr_height;
+	
+	printf("positioned = %d genom_szie=%d \n", positioned, individ.genom_size);
+	n_positioned = positioned;
+    
+    if (draw)
+        draw_nested(positions);
+
+    return curr_height;
 }
 
 static void calculate_fitness()
@@ -479,37 +711,11 @@ static int crossover()
         n_individs += 1;
     }
 
-    return res;
+   return res;
+  
 }
 
-static void init_nfp(double width, double height) 
-{
-    struct NfpPoint *p1, *p2, *p3, *p4;
-    
-    p4 = (struct NfpPoint*)malloc(sizeof(struct NfpPoint));
-    p4->next = NULL;
-    p4->point.x = width - 1;
-    p4->point.y = height - 1;
-
-    p3 = (struct NfpPoint*)malloc(sizeof(struct NfpPoint));
-    p3->next = p4;
-    p3->point.x = width - 1;;
-    p3->point.y = 0;
-    
-    p2 = (struct NfpPoint*)malloc(sizeof(struct NfpPoint));
-    p2->next = p3;
-    p2->point.x = 0;
-    p2->point.y = 0;
-    
-    p1 = (struct NfpPoint*)malloc(sizeof(struct NfpPoint));
-    p1->next = p2;
-    p1->point.x = 0;
-    p1->point.y = height - 1;
-    
-    head = p1;
-}
-
-void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double width, double height)
+void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double w, double h)
 {
     int i, j, k, dataset_size;
     struct DxfFile *dataset;
@@ -517,17 +723,20 @@ void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double width, dou
     min_height = height;
     max_individs = 256;
     n_individs = 0;
+    width = w;
+    height = h;
 
     individs = (struct Individ*)malloc(sizeof(struct Individ) * max_individs);
     dataset = generate_dataset(dxf_files, f_count, &dataset_size);
     printf("dataset_size=%d\n", dataset_size);
     qsort(dataset, dataset_size, sizeof(struct DxfFile), dxf_cmp);
     max_genom = dataset_size;
-    init_nfp(width, height);
-
-    generate_first_individ(dataset, dataset_size, width, height);
     
-   /* for (i = 0; i < 1; i++) {
+    generate_first_individ(dataset, dataset_size);
+
+    return;
+    
+    for (i = 0; i < 1; i++) {
         mutate_individ(0, individs[0].genom_size);
         for (j = 0; j < n_individs - 1; j++) {
             if (individs_equal(individs[j], individs[n_individs - 1])) {
@@ -539,7 +748,7 @@ void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double width, dou
     }
 
     for (i = 1; i < n_individs; i++) {
-        individs[i].height = calculate_individ_height(individs[i], dataset, width, height, 0);
+        individs[i].height = calculate_individ_height(individs[i], dataset, 0);
     }
     
     printf("\n\n");
@@ -581,15 +790,13 @@ void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double width, dou
             printf("\n");
         }
 
-        individs[n_individs - 1].height = calculate_individ_height(individs[n_individs - 1], dataset, width, height, 0);
+        individs[n_individs - 1].height = calculate_individ_height(individs[n_individs - 1], dataset, 0);
         if (res == 2)
-            individs[n_individs - 2].height = calculate_individ_height(individs[n_individs - 2], dataset, width, height, 0);
+            individs[n_individs - 2].height = calculate_individ_height(individs[n_individs - 2], dataset, 0);
         calculate_fitness();
     }
 
     qsort(individs, n_individs, sizeof(struct Individ), individs_cmp);
     printf("\n\n\n\n RESULT MIN_HEIGHT=%f FITNESS=%f\n", individs[0].height, individs[0].fitness);
-    calculate_individ_height(individs[0], dataset, width, height, 1);*/
+    calculate_individ_height(individs[0], dataset, 1);
 }
-
-
