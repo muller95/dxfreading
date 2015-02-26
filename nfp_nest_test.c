@@ -311,8 +311,8 @@ static void recursive_move_x(double *x_pos, double *y_pos, struct DxfFile *curr_
         *x_pos = x;
     }
     
-    if (prev_x != *x_pos)
-        recursive_move_y(x_pos, y_pos, curr_file, positions, positioned);
+  //  if (prev_x != *x_pos)
+   //     recursive_move_y(x_pos, y_pos, curr_file, positions, positioned);
            
 }
 
@@ -335,19 +335,17 @@ static void generate_first_individ(struct DxfFile *dataset, int dataset_size)
 
 	for (i = 0; i < dataset_size; i++) {
 		int res;
-		double min_length, mg_y, mg_x, x, y;
+		double y_max, x_min, x, y;
 		struct DxfFile curr_file;
 					
 		curr_file = filedup(dataset[i]);
-		min_length = -1;
-        mg_y = -1;
+
 	    
         was_placed = 0;
 		for (x = 0.0; x <= width; x += 1.0) {
 			res = 0;
 			for (y = trunc(curr_height + 1.0); y >= 0; y -= 1.0) {
-				double g_x, g_y, tmp_length, x_pos, y_pos;
-                int xi, yi;
+				double tx_min, ty_max, x_pos, y_pos;
                 
 				for (j = 0; j < positioned; j++) {
 					int pos_ind;
@@ -376,21 +374,21 @@ static void generate_first_individ(struct DxfFile *dataset, int dataset_size)
 				if (curr_file.y_max + y > height)				
 					continue;
 
-				g_x = curr_file.polygon.gravity_center.x + x_pos;
-				g_y = curr_file.polygon.gravity_center.y + y;
+				tx_min = x_pos;
+				ty_max = curr_file.y_max + y;
                 			
                 if (x_pos + curr_file.x_max > width)
                     continue;
 
-                if (min_length == -1 || g_y < mg_y) {
+                if (was_placed == 0 || ty_max < y_max) {
                     was_placed = 1;
-                    mg_y = g_y;
-                    mg_x = g_x;
+                    y_max = ty_max;
+                    x_min = tx_min;
     				positions[positioned].file = curr_file;
 	    			positions[positioned].x = x_pos;
 		    		positions[positioned].y = y_pos;
-                } else if (g_y == mg_y && (g_x < mg_x)) {
-                    mg_x = g_x;
+                } else if (y_max == ty_max  && (tx_min < x_min)) {
+                    x_min = tx_min;
     				positions[positioned].file = curr_file;
 	    			positions[positioned].x = x_pos;
 		    		positions[positioned].y = y_pos;
@@ -503,15 +501,14 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
 
 	positioned = 0;
     
-    angle_step = 60;
+    angle_step = 15;
 	for (i = 0; i < individ.genom_size; i++) {
 		int res, index;
-		double min_length, x, y, mg_x, mg_y, angle, min_angle;
+		double x, y, x_min, y_max, angle, min_angle;
 		struct DxfFile curr_file;
 					
         index = individ.genom[i];
-        mg_y = -1;
-	    
+	   
         was_placed = 0;
         for (angle = 0.0; angle < 360; angle += angle_step) {
             curr_file = filedup(dataset[index]);
@@ -521,7 +518,7 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
 	    	for (x = 0.0; x <= width; x += 1.0) {
 	    		res = 0;
     			for (y = trunc(curr_height + 1.0); y >= 0; y -= 1.0) {
-			    	double g_x, g_y, tmp_length, x_pos, y_pos;
+			    	double tx_min, ty_max, tmp_length, x_pos, y_pos;
 		    		for (j = 0; j < positioned; j++) {
 		    			int pos_ind;
 	    				struct DxfFile pos_file;
@@ -550,23 +547,23 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
 		    		if (curr_file.y_max + y > height)				
 			    		continue;
 
-    				g_x = curr_file.polygon.gravity_center.x + x_pos;
-	    			g_y = curr_file.polygon.gravity_center.y + y;
+    				tx_min = x_pos;
+	    			ty_max = curr_file.y_max + y_pos;
                 			
                     if (x_pos + curr_file.x_max > width)
                         continue;
 
-                    if (mg_y == -1 || g_y < mg_y) {
+                    if (was_placed == 0 || ty_max < y_max ) {
                         was_placed = 1;
-                        mg_y = g_y;
-                        mg_x = g_x;
+                        y_max = ty_max;
+                        x_min = tx_min;
                         min_angle = angle;
 	    				positions[positioned].file = curr_file;
 		    			positions[positioned].x = x_pos;
 			    		positions[positioned].y = y;
-                    } else if (y == mg_y && (g_x < mg_x)) {
+                    } else if (y_max == ty_max && (tx_min < x_min)) {
                         min_angle = angle;
-                        mg_x = g_x;
+                        x_min = tx_min;
 	    				positions[positioned].file = curr_file;
 		    			positions[positioned].x = x_pos;
 			    		positions[positioned].y = y;
@@ -579,8 +576,6 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
 	    		}
     		}
         }
-        
-    //    free_mask(mask, (int)width, (int)height);
 
         if (!was_placed) 
             continue;
