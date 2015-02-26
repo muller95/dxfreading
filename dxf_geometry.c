@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <math.h>
 #include "nestapi_core_structs.h"
 
@@ -217,17 +218,18 @@ void gravity_center_in_polygon(struct DxfFile *dxf_file)
 
 	start = (tmp_p.y <= tmp_p1.y)? 0 : n - 1;
 	step = (tmp_p.y <= tmp_p1.y)? 1 : -1;
-	end = (tmp_p.y <= tmp_p1.y)? n - 1 : 1;
+	end = (tmp_p.y <= tmp_p1.y)? n : 0;
 
 	n_squares = 0;
-	for (i = start; i != (end + 1 * step); i += step) {
+	for (i = start; i != end; i += step) {
 		struct PointD p1, p2, rect_gravity_center, triangle_gravity_center;
 		double rect_square, triangle_square;
 		double x_projection, y_min, y_max;
 	
 		p1 = dxf_file->polygon.points[i];
 		p2 = dxf_file->polygon.points[i + step];
-		
+	    
+        	
         if (p1.x == p2.x) {
             squares[n_squares] = 0;
             centers[n_squares].x = p1.x;
@@ -235,9 +237,10 @@ void gravity_center_in_polygon(struct DxfFile *dxf_file)
             n_squares++;
             continue;
         } else if (p1.y == p2.y) {
-            squares[n_squares] = 0;
+            squares[n_squares] = (p2.x - p1.x) * p1.y;
             centers[n_squares].x = (p1.x + p2.x) / 2;
-            centers[n_squares].y = p1.y;
+            centers[n_squares].y = p1.y / 2;
+            n_squares++;
             continue;
         }
 		
@@ -251,11 +254,11 @@ void gravity_center_in_polygon(struct DxfFile *dxf_file)
 		rect_gravity_center.y = y_min / 2;
 		
 		triangle_gravity_center.y = (y_min + y_min + y_max) / 3;
-		if (p1.y > p2.y) {
+		if (p1.y > p2.y)
 			triangle_gravity_center.x = (p1.x + p1.x + p2.x) / 3;
-		} else {
+		else 
 			triangle_gravity_center.x = (p1.x + p2.x + p2.x) / 3; 
-		}	
+			
 
 		squares[n_squares] = rect_square + triangle_square;
 		centers[n_squares].x = (rect_square * rect_gravity_center.x + triangle_square * triangle_gravity_center.x) / (rect_square + triangle_square);
