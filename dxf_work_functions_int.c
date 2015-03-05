@@ -2,19 +2,19 @@
 #include <string.h>
 #include "nestapi_core_structs.h"
 
-struct DxfFile filedup(struct DxfFile source)
+struct DxfFileI filedup_int(struct DxfFileI source)
 {
     int i, j;
-    struct DxfFile dest;
+    struct DxfFileI dest;
     
     dest.path = strdup(source.path);
     dest.how_many = source.how_many;
     dest.n_primitives = source.n_primitives;
     dest.n_controldots = (int*)malloc(sizeof(int) * source.n_primitives);
-    dest.primitives = (struct DxfPrimitive*)malloc(sizeof(struct DxfPrimitive) * source.n_primitives);
+    dest.primitives = (struct DxfPrimitiveI*)malloc(sizeof(struct DxfPrimitiveI) * source.n_primitives);
 
     for (i = 0; i < source.n_primitives; i++) {
-        dest.primitives[i].points = (struct PointD*)malloc(sizeof(struct PointD) * source.n_controldots[i]);
+        dest.primitives[i].points = (struct PointI*)malloc(sizeof(struct PointI) * source.n_controldots[i]);
         dest.n_controldots[i] = source.n_controldots[i];
         dest.primitives[i].type = source.primitives[i].type;
         for (j = 0; j < source.n_controldots[i]; j++) {

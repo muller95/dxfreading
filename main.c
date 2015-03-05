@@ -6,6 +6,7 @@
 GtkWidget *main_window, *flist, *text_width, *text_height;
 GtkListStore *list_store;
 struct DxfFile *dxf_files;
+struct DxfFileI *dxf_files_int;
 char **f_names;
 int max_files = 128, f_count = 0;
 int quant_files = 4;
@@ -82,42 +83,14 @@ void on_subitem_nest_click (GtkWidget *widget, gpointer user_data)
 
 void on_subitem_nest1_click (GtkWidget *widget, gpointer user_data)
 {
-	/*GtkWidget *nest_options_window, *buffer_width, *buffer_height; 
-	GtkWidget *nest_button; 
-	GtkWidget *v_box, *h_box1, *h_box2, *lbl_width, *lbl_height;
-	
-	nest_options_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-
-	text_width = gtk_entry_new();
-	text_height = gtk_entry_new();
-	lbl_width = gtk_label_new("width: ");
-	lbl_height = gtk_label_new("height:");
-	nest_button = gtk_button_new_with_label("Nest");
-
-	v_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-	h_box1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
-	h_box2 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
-	
-	
-	gtk_box_pack_start(GTK_BOX(h_box1), lbl_width, 0, 0, 0);
-	gtk_box_pack_start(GTK_BOX(h_box1), text_width, 0, 0, 0);
-
-	gtk_box_pack_start(GTK_BOX(h_box2), lbl_height, 0, 0, 0);	
-	gtk_box_pack_start(GTK_BOX(h_box2), text_height, 0, 0, 0);
-
-	gtk_box_pack_start(GTK_BOX(v_box), h_box1, 0, 0, 0);
-	gtk_box_pack_start(GTK_BOX(v_box), h_box2, 0, 0, 0);
-	gtk_box_pack_start(GTK_BOX(v_box), nest_button, 0, 0, 0);
-
-		
-	gtk_container_add(GTK_CONTAINER(nest_options_window), v_box);
-	
-	g_signal_connect(nest_button, "clicked", G_CALLBACK(on_button_nest_click), NULL);
-
-	gtk_window_set_default_size(GTK_WINDOW(nest_options_window), 320, 240);
-	gtk_widget_show_all(nest_options_window);*/
 	start_nfp_nesting(dxf_files, f_count, 800, 800);
 }
+
+void on_subitem_nest2_click (GtkWidget *widget, gpointer user_data)
+{
+    start_nfp_nesting_int(dxf_files_int, f_count, 800, 800);
+}
+
 
 int check_if_opened(char *path)
 {
@@ -137,6 +110,7 @@ void on_subitem_open_click (GtkWidget *widget, gpointer user_data)
 	GtkTreeIter iter;
     GtkFileFilter *filter;
 	struct DxfFile dxf_file;
+    struct DxfFileI dxf_file_int;
 	int res;
 	
 	action = GTK_FILE_CHOOSER_ACTION_OPEN;
@@ -164,13 +138,16 @@ void on_subitem_open_click (GtkWidget *widget, gpointer user_data)
 	    	f_names[f_count] = filename;
          
 	    	dxf_file_new(&dxf_file, filename, quant_files);
+            dxf_file_new_int(&dxf_file_int, filename, quant_files);
 	    	dxf_files[f_count] = dxf_file;
+            dxf_files_int[f_count] = dxf_file_int;
 	    	f_count++;
 	    	if (f_count == max_files) {
     
 	    		max_files *= 2;
 	    		f_names = (char**)realloc(f_names ,sizeof(char*) * max_files);
 		    	dxf_files = (struct DxfFile*)realloc(dxf_files ,sizeof(struct DxfFile) * max_files);
+                dxf_files_int = (struct DxfFileI*)realloc(dxf_files_int, sizeof(struct DxfFileI) * max_files);
     
 	    	}
 	    	gtk_list_store_append(list_store, &iter);
@@ -209,6 +186,7 @@ void cell_edited_callback(GtkCellRendererText *cell, char *path_string, char *ne
             if (atoi(new_text) > 0) {
                 gtk_list_store_set(list_store, &iter, column, atoi(new_text), -1);
                 dxf_files[num - 1].how_many = atoi(new_text);
+                dxf_files_int[num - 1].how_many = atoi(new_text);
             }
 
             break;
@@ -217,11 +195,14 @@ void cell_edited_callback(GtkCellRendererText *cell, char *path_string, char *ne
 
 int main (int argc, char *argv[])
 {
-	GtkWidget *menu, *menu_item, *submenu, *submenu_item1, *submenu_item2, *submenu_item3, *v_box, *scroll_window;
+	GtkWidget *menu, *menu_item, *submenu, *submenu_item1, *submenu_item2, *submenu_item3, *submenu_item4,*v_box, *scroll_window;
+
 	GtkCellRenderer *renderer;
-    	char *item1 = "file", *subitem1 = "open", *subitem2 = "rect nest", *subitem3 = "stair nest";
+    	char *item1 = "file", *subitem1 = "open", *subitem2 = "rect nest", *subitem3 = "nfp nest double", *subitem4 = "nfp nest int";
 	
 	dxf_files = (struct DxfFile*)malloc(sizeof(struct DxfFile) * max_files);
+    dxf_files_int = (struct DxfFileI*)malloc(sizeof(struct DxfFileI) * max_files);
+
 	f_names = (char**)malloc(sizeof(char*) * max_files);
 	
 	gtk_init (&argc,&argv);	
@@ -253,6 +234,12 @@ int main (int argc, char *argv[])
 	gtk_menu_shell_append(GTK_MENU_SHELL(submenu), submenu_item3);
 	gtk_menu_item_set_submenu(GTK_MENU_ITEM(menu_item), submenu);
 	g_signal_connect(submenu_item3, "activate", G_CALLBACK(on_subitem_nest1_click), NULL); //menu open signal click
+    
+    submenu_item4 = gtk_menu_item_new_with_label(subitem4); 	
+	gtk_menu_shell_append(GTK_MENU_SHELL(submenu), submenu_item4);
+	gtk_menu_item_set_submenu(GTK_MENU_ITEM(menu_item), submenu);
+	g_signal_connect(submenu_item4, "activate", G_CALLBACK(on_subitem_nest2_click), NULL); //menu open signal click
+
 
 
 	gtk_box_pack_start(GTK_BOX(v_box), menu, 0, 0, 0);

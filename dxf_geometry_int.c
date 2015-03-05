@@ -3,32 +3,32 @@
 #include <math.h>
 #include "nestapi_core_structs.h"
 
-void move_to_zero(struct DxfFile *dxf_file);
-void create_polygon_jarvis(struct DxfFile *dxf_file);
-void gravity_center_in_polygon(struct DxfFile *dxf_file);
-void rotate_polygon(struct DxfFile *dxf_file, double angle);
+void move_to_zero_int(struct DxfFileI *dxf_file);
+void create_polygon_jarvis_int(struct DxfFileI *dxf_file);
+void gravity_center_in_polygon_int(struct DxfFileI *dxf_file);
+void rotate_polygon_int(struct DxfFileI *dxf_file, double angle);
 
-static struct PointD get_start_point(struct DxfFile *dxf_file);
-static struct PointD get_vector(struct PointD point1, struct PointD point2);
-static double vector_len(struct PointD vec);
+static struct PointI get_start_point(struct DxfFileI *dxf_file);
+static struct PointI get_vector(struct PointI point1, struct PointI point2);
+static int vector_len(struct PointI vec);
 
-void rotate_polygon(struct DxfFile *dxf_file, double angle)
+void rotate_polygon_int(struct DxfFileI *dxf_file, double angle)
 {
 	int i, j, first;
 	double angle_rads, x_max, y_max, x_min, y_min;
-	struct PointD grav_p; 
+	struct PointI grav_p; 
 	angle_rads = angle * M_PI / 180;
 
 	grav_p = dxf_file->polygon.gravity_center;
-	dxf_file->polygon.gravity_center.x = grav_p.x * cos(angle_rads) - grav_p.y  * sin(angle_rads);
-    dxf_file->polygon.gravity_center.y = grav_p.x * sin(angle_rads) + grav_p.y * cos(angle_rads); 
+	dxf_file->polygon.gravity_center.x = (int)trunc(grav_p.x * cos(angle_rads) - grav_p.y * sin(angle_rads) + 0.5);
+    dxf_file->polygon.gravity_center.y = (int)trunc(grav_p.x * sin(angle_rads) + grav_p.y * cos(angle_rads) + 0.5); 
 
     
 	for (i = 0; i < dxf_file->polygon.n_points; i++) {
-		struct PointD p;
+		struct PointI p;
 		p = dxf_file->polygon.points[i];
-		dxf_file->polygon.points[i].x = p.x * cos(angle_rads) - p.y  * sin(angle_rads);
-		dxf_file->polygon.points[i].y = p.x * sin(angle_rads) + p.y * cos(angle_rads); 
+		dxf_file->polygon.points[i].x = (int)trunc(p.x * cos(angle_rads) - p.y * sin(angle_rads) + 0.5);
+		dxf_file->polygon.points[i].y = (int)trunc(p.x * sin(angle_rads) + p.y * cos(angle_rads) + 0.5); 
 	}
 	
 	x_max = dxf_file->polygon.points[0].x;
@@ -37,7 +37,7 @@ void rotate_polygon(struct DxfFile *dxf_file, double angle)
 	y_min = dxf_file->polygon.points[0].y;	
 			
 	for (i = 1; i < dxf_file->polygon.n_points; i++) {
-		double x_tmp, y_tmp;
+		int x_tmp, y_tmp;
 
 		x_tmp = dxf_file->polygon.points[i].x;
 		y_tmp = dxf_file->polygon.points[i].y;
@@ -69,7 +69,7 @@ void rotate_polygon(struct DxfFile *dxf_file, double angle)
 //    gravity_center_in_polygon(dxf_file);
 }
 
-void move_to_zero(struct DxfFile *dxf_file)
+void move_to_zero_int(struct DxfFileI *dxf_file)
 {
 	int first = 1;
 	int i = 0, j = 0;
@@ -108,11 +108,11 @@ void move_to_zero(struct DxfFile *dxf_file)
 	dxf_file->m_height = dxf_file->y_max;	
 }
 
-static struct PointD get_start_point(struct DxfFile *dxf_file)
+static struct PointI get_start_point(struct DxfFileI *dxf_file)
 {
-	struct PointD p;
-	double x, y;
-	double x_min, y_min;
+	struct PointI p;
+	int x, y;
+	int x_min, y_min;
 	
 	x_min = dxf_file->primitives[0].points[0].x;
 	y_min = dxf_file->primitives[0].points[0].y;
@@ -136,35 +136,35 @@ static struct PointD get_start_point(struct DxfFile *dxf_file)
 	return p;
 }
 
-static struct PointD get_vector(struct PointD point1, struct PointD point2)
+static struct PointI get_vector(struct PointI point1, struct PointI point2)
 {
-	struct PointD vector;
+	struct PointI vector;
 	vector.x = point2.x - point1.x;
 	vector.y = point2.y - point1.y;
 	return vector;
 }
 
-static double vector_len(struct PointD vec)
+static int vector_len(struct PointI vec)
 {	
-	double len;
-	len = sqrt(pow(vec.x, 2) + pow(vec.y, 2));
+	int len;
+	len = (int)trunc(sqrt(pow(vec.x, 2) + pow(vec.y, 2)) + 0.5);
 	return len;
 }
 
-void create_polygon_jarvis(struct DxfFile *dxf_file)
+void create_polygon_jarvis_int(struct DxfFileI *dxf_file)
 {
 	int n_points = 0;
 	int n = 0;
 	int i, j;
-	double crossprod;
-	struct PointD *points;
-	struct PointD vector, temp_vector;
-	struct PointD start_p, curr_p, temp_p, next_p;
+	int crossprod;
+	struct PointI *points;
+	struct PointI vector, temp_vector;
+	struct PointI start_p, curr_p, temp_p, next_p;
 
 	for (i = 0; i < dxf_file->n_primitives; i++) {
 		n_points += dxf_file->n_controldots[i];
 	}
-	dxf_file->polygon.points = (struct PointD*)malloc(sizeof(struct PointD) * n_points);
+	dxf_file->polygon.points = (struct PointI*)malloc(sizeof(struct PointI) * n_points);
 	points = dxf_file->polygon.points;
 		
 	start_p = get_start_point(dxf_file);
@@ -202,16 +202,16 @@ void create_polygon_jarvis(struct DxfFile *dxf_file)
 	dxf_file->polygon.n_points = n;
 }
 
-void gravity_center_in_polygon(struct DxfFile *dxf_file)
+void gravity_center_in_polygon_int(struct DxfFileI *dxf_file)
 {
 	int i, n, start, step, end, n_squares;
-	double *squares;
-	double square_sum, x_sum, y_sum;
-	struct PointD *centers, tmp_p, tmp_p1;
+	int *squares;
+	int square_sum, x_sum, y_sum;
+	struct PointI *centers, tmp_p, tmp_p1;
 
 	n = dxf_file->polygon.n_points;
-	squares = (double*)malloc(sizeof(double) * n);
-	centers = (struct PointD*)malloc(sizeof(struct PointD) * n - 1);
+	squares = (int*)malloc(sizeof(int) * n);
+	centers = (struct PointI*)malloc(sizeof(struct PointI) * n - 1);
 
 	tmp_p = dxf_file->polygon.points[0];
 	tmp_p1 = dxf_file->polygon.points[1];
@@ -222,9 +222,9 @@ void gravity_center_in_polygon(struct DxfFile *dxf_file)
 
 	n_squares = 0;
 	for (i = start; i != end; i += step) {
-		struct PointD p1, p2, rect_gravity_center, triangle_gravity_center;
-		double rect_square, triangle_square;
-		double x_projection, y_min, y_max;
+		struct PointI p1, p2, rect_gravity_center, triangle_gravity_center;
+		int rect_square, triangle_square;
+		int x_projection, y_min, y_max;
 	
 		p1 = dxf_file->polygon.points[i];
 		p2 = dxf_file->polygon.points[i + step];
@@ -261,8 +261,8 @@ void gravity_center_in_polygon(struct DxfFile *dxf_file)
 			
 
 		squares[n_squares] = rect_square + triangle_square;
-		centers[n_squares].x = (fabs(rect_square) * rect_gravity_center.x + triangle_square * fabs(triangle_gravity_center.x)) / (fabs(rect_square + triangle_square));
-		centers[n_squares].y = (fabs(rect_square) * rect_gravity_center.y + triangle_square * fabs(triangle_gravity_center.y)) / (fabs(rect_square + triangle_square));
+		centers[n_squares].x = (abs(rect_square) * rect_gravity_center.x + triangle_square * abs(triangle_gravity_center.x)) / (abs(rect_square + triangle_square));
+		centers[n_squares].y = (abs(rect_square) * rect_gravity_center.y + triangle_square * abs(triangle_gravity_center.y)) / (abs(rect_square + triangle_square));
 		n_squares++;
 	}
 	

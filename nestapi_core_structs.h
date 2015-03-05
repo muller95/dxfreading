@@ -54,3 +54,15 @@ struct Individ {
     int genom_size;
     double height, fitness;
 };
+
+struct LinearPrimitivesD {
+    struct PointD *points;
+    int n_points;
+};
+
+struct LinearFigureD {
+    struct LinearPrimitiveD *primitives;
+    int n_primitives;
+};
+
+#include "nestapi_core_structs_int.h"

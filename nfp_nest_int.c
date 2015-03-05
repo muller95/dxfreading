@@ -3,47 +3,47 @@
 #include <time.h>
 #include <gtk/gtk.h>
 #include "nestapi_core_structs.h"
-#include "dxf_work_functions.h"
-#include "dxf_geometry.h"
-#include "cross_check_funcs.h"
+#include "dxf_work_functions_int.h"
+#include "dxf_geometry_int.h"
+#include "cross_check_funcs_int.h"
 
 static int n_positioned, was_placed;
 static int max_individs, n_individs, max_genom;
-static double min_height, width, height;
-static int **mask;
+static int min_height, width, height;
+static int *mask;
 
 struct Individ *individs;
 
-void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double w, double h);
+void start_nfp_nesting_int(struct DxfFileI *dxf_files, int f_count, int w, int h);
 
-static int check_position(struct DxfFile curr_file, struct Position *positions, int positioned, double x_pos, double y_pos, double g_x, 
-                            double g_y, double *mg_y, double *mg_x);
-static void recursive_move_y(double *x_pos, double *y_pos, struct DxfFile *curr_file, struct Position *positions, int positioned);
-static void recursive_move_x(double *x_pos, double *y_pos, struct DxfFile *curr_file, struct Position *positions, int positioned);
+static int check_position(struct DxfFileI curr_file, struct PositionI *positions, int positioned, int x_pos, int y_pos, int g_x, 
+                            int g_y, int *mg_y, int *mg_x);
+static void recursive_move_y(int *x_pos, int *y_pos, struct DxfFileI *curr_file, struct PositionI *positions, int positioned);
+static void recursive_move_x(int *x_pos, int *y_pos, struct DxfFileI *curr_file, struct PositionI *positions, int positioned);
 static int crossover(int i1, int i2);
-static int file_individs_equal(struct Individ individ1, struct Individ individ2, struct DxfFile *dataset);
+static int file_individs_equal(struct Individ individ1, struct Individ individ2, struct DxfFileI *dataset);
 static int individs_equal(struct Individ individ1, struct Individ individ2);
 static int individs_cmp(const void *individ1, const void *individ2);
 static void calculate_fitness();
-static int calculate_individ_height(struct Individ individ, struct DxfFile *dataset, int draw);
-static struct DxfFile* generate_dataset(struct DxfFile *dxf_files, int f_count, int *dataset_size);
+static int calculate_individ_height(struct Individ individ, struct DxfFileI *dataset, int draw);
+static struct DxfFileI* generate_dataset(struct DxfFileI *dxf_files, int f_count, int *dataset_size);
 static void mutate_individ(int n, int genom_size);
-static int left_hole_nesting(struct DxfFile *dataset, struct Position *positions, int *max_position, int positioned, int dataset_size);
-static void generate_first_individ(struct DxfFile *dataset, int dataset_size);
+static int left_hole_nesting(struct DxfFileI *dataset, struct PositionI *positions, int *max_position, int positioned, int dataset_size);
+static void generate_first_individ(struct DxfFileI *dataset, int dataset_size);
 static int dxf_cmp(const void *file1, const void *file2);
 
 static gboolean on_draw_nested_signal(GtkWidget *widget, cairo_t *cr, gpointer user_data)
 {
 	int i, k, j;
-	struct Position *positions;
+	struct PositionI *positions;
 
-	positions = (struct Position*)user_data;
+	positions = (struct PositionI*)user_data;
 
 	cairo_set_line_width(cr, 1);		
 	
 /*	for (j = 0; j < n_positioned; j++) {
-		struct DxfFile dxf_file;
-		double offset_x, offset_y;
+		struct DxfFileI dxf_file;
+		int offset_x, offset_y;
 				
 		dxf_file = positions[j].file;
 		offset_x = positions[j].x;
@@ -52,7 +52,7 @@ static gboolean on_draw_nested_signal(GtkWidget *widget, cairo_t *cr, gpointer u
 		cairo_set_source_rgb(cr, 0, 0, 0);
 		for (i = 0; i < dxf_file.n_primitives; i++) {
 			for (k = 0; k < dxf_file.n_controldots[i] - 1; k++) {
-				double x, y;
+				int x, y;
 				x = dxf_file.primitives[i].points[k].x + offset_x;
 				y = dxf_file.primitives[i].points[k].y + offset_y;	
 				cairo_move_to(cr, x, y);
@@ -67,14 +67,14 @@ static gboolean on_draw_nested_signal(GtkWidget *widget, cairo_t *cr, gpointer u
 	cairo_set_source_rgb(cr, 255, 0, 0);
     cairo_rectangle(cr, 0, 0, width, height);
 	for (j = 0; j < n_positioned; j++) {
-			double offset_x, offset_y, g_x, g_y;
-			struct DxfFile dxf_file;
+			int offset_x, offset_y, g_x, g_y;
+			struct DxfFileI dxf_file;
 
 			dxf_file = positions[j].file;
 			offset_x = positions[j].x;
 			offset_y = positions[j].y;
 		for (i = 0; i < dxf_file.polygon.n_points - 1; i++) {
-			double x, y;
+			int x, y;
 			x = dxf_file.polygon.points[i].x;
 			y = dxf_file.polygon.points[i].y;
 			cairo_move_to(cr, x + offset_x, y + offset_y);
@@ -94,14 +94,14 @@ static gboolean on_draw_nested_signal(GtkWidget *widget, cairo_t *cr, gpointer u
 
 	cairo_set_source_rgb(cr, 0, 255, 0);
 	for (j = 0; j < n_positioned; j++) {
-			double offset_x, offset_y, g_x, g_y;
-			struct DxfFile dxf_file;
+			int offset_x, offset_y, g_x, g_y;
+			struct DxfFileI dxf_file;
 
 			dxf_file = positions[j].file;
 			offset_x = positions[j].x;
 			offset_y = positions[j].y;
 		for (i = 0; i < dxf_file.polygon.n_points; i++) {
-			double x, y;
+			int x, y;
 			x = dxf_file.polygon.points[i].x;
 			y = dxf_file.polygon.points[i].y;
 			cairo_rectangle(cr, x + offset_x, y + offset_y, 3, 3);
@@ -115,13 +115,14 @@ static gboolean on_draw_nested_signal(GtkWidget *widget, cairo_t *cr, gpointer u
 		cairo_stroke(cr);
 	}
 
-
+    cairo_set_source_rgb(cr, 0.0, 0.0, 0.0);
+    cairo_rectangle(cr, 0, min_height, width, 2);
 
 	cairo_stroke(cr);	
 	return FALSE;	
 }
 
-void draw_nested(struct Position *positions)
+void draw_nested_int(struct PositionI *positions)
 {
 
 	GtkWidget *view_window, *draw_area;
@@ -140,11 +141,11 @@ void draw_nested(struct Position *positions)
 
 static int dxf_cmp(const void *file1, const void *file2)
 {
-	double square1, square2;
-	struct DxfFile *dxf_file1, *dxf_file2;
+	int square1, square2;
+	struct DxfFileI *dxf_file1, *dxf_file2;
 
-	dxf_file1 = (struct DxfFile*)file1;	
-	dxf_file2 = (struct DxfFile*)file2;
+	dxf_file1 = (struct DxfFileI*)file1;	
+	dxf_file2 = (struct DxfFileI*)file2;
 
 	square1 = dxf_file1->m_width * dxf_file1->m_height;
 	square2 = dxf_file2->m_width * dxf_file2->m_height;
@@ -157,22 +158,26 @@ static int dxf_cmp(const void *file1, const void *file2)
 		return 0;
 }
 
-static int left_hole_nesting(struct DxfFile *dataset, struct Position *positions, int *max_position, int positioned, int dataset_size)
+static int left_hole_nesting(struct DxfFileI *dataset, struct PositionI *positions, int *max_position, int positioned, int dataset_size)
 {
     int i, j, genom_size;
+
     for (i = 0; i < dataset_size; i++) {
         int res;
-        double y;
-        struct DxfFile curr_file;
+        int y;
+        struct DxfFileI curr_file;
+
+        if (mask[i] == 1)
+            continue;
         
-        curr_file = filedup(dataset[i]);
+        curr_file = filedup_int(dataset[i]);
         was_placed = 0;
         for (y = -1 * curr_file.m_height; y <= height - curr_file.m_height; y++) {
-        	double g_x, g_y;
+        	int g_x, g_y;
 			for (j = 0; j < positioned; j++) {
 				int pos_ind;
-				struct DxfFile pos_file;
-				struct PointD offset, pos_offset;
+				struct DxfFileI pos_file;
+				struct PointI offset, pos_offset;
                 
 				pos_file = positions[j].file;
 					
@@ -181,7 +186,7 @@ static int left_hole_nesting(struct DxfFile *dataset, struct Position *positions
 				pos_offset.x = positions[j].x;
 				pos_offset.y = positions[j].y;
 
-				res = cross_check(curr_file, pos_file, offset, pos_offset);
+				res = cross_check_int(curr_file, pos_file, offset, pos_offset);
 				if (res == 1)  
 					break;
 			}
@@ -203,6 +208,8 @@ static int left_hole_nesting(struct DxfFile *dataset, struct Position *positions
         if (!was_placed)
             continue;
 
+        mask[i] = 1;
+
         genom_size = individs[0].genom_size;
         individs[0].genom[genom_size] = i;
         individs[0].genom_size += 1;
@@ -211,50 +218,29 @@ static int left_hole_nesting(struct DxfFile *dataset, struct Position *positions
 		printf("hole positioned = %d %s\n", positioned, positions[positioned - 1].file.path);
 		if (positioned == *max_position) {					
 			*max_position *= 2;
-			positions = (struct Position*)realloc(positions, sizeof(struct Position) * (*max_position));
+			positions = (struct PositionI*)realloc(positions, sizeof(struct PositionI) * (*max_position));
 		}
     }
 
     return positioned;
 }
 
-static void init_mask(int w, int h)
-{
-    int i;
-
-    mask = (int**)malloc(sizeof(int*) * (h * 2));
-
-    for (i = 0; i < h * 2; i++) 
-        mask[i] = (int*)calloc(w * 2, sizeof(int));
-}
-
-static void free_mask(int **mask, int w, int h)
-{
-    int i;
-
-    for (i = 0; i < height * 2; i++)
-        free(mask[i]);
-
-    free(mask);
-}
-
-
-static void recursive_move_y(double *x_pos, double *y_pos, struct DxfFile *curr_file, struct Position *positions, int positioned)
+static void recursive_move_y(int *x_pos, int *y_pos, struct DxfFileI *curr_file, struct PositionI *positions, int positioned)
 {
     int j;
-    double x, y, prev_y;
+    int x, y, prev_y;
 
     prev_y = *y_pos;
     x = *x_pos;
 
     for (y = *y_pos; y >= 0; y -= 1.0) {
         int res;
-        double g_x, g_y, tmp_length;
+        int g_x, g_y, tmp_length;
  //       mask[(int)x][(int)y] = 1;
         for (j = 0; j < positioned; j++) {
             int pos_ind;
-	    	struct DxfFile pos_file;
-		    struct PointD offset, pos_offset;
+	    	struct DxfFileI pos_file;
+		    struct PointI offset, pos_offset;
 
 			pos_file = positions[j].file;
 				    	
@@ -263,7 +249,7 @@ static void recursive_move_y(double *x_pos, double *y_pos, struct DxfFile *curr_
 			pos_offset.x = positions[j].x;
 			pos_offset.y = positions[j].y;
 
-			res = cross_check(*curr_file, pos_file, offset, pos_offset);
+			res = cross_check_int(*curr_file, pos_file, offset, pos_offset);
 			if (res == 1)  
 			   	break;
         }
@@ -278,22 +264,22 @@ static void recursive_move_y(double *x_pos, double *y_pos, struct DxfFile *curr_
         recursive_move_x(x_pos, y_pos, curr_file, positions, positioned);
 }
 
-static void recursive_move_x(double *x_pos, double *y_pos, struct DxfFile *curr_file, struct Position *positions, int positioned)
+static void recursive_move_x(int *x_pos, int *y_pos, struct DxfFileI *curr_file, struct PositionI *positions, int positioned)
 {
     int j;
-    double x, y, prev_x;
+    int x, y, prev_x;
     
     prev_x = *x_pos;
     y = *y_pos;
 
     for (x = *x_pos; x >= 0; x -= 1.0) {
         int res;
-        double g_x, g_y, tmp_length;
+        int g_x, g_y, tmp_length;
         
         for (j = 0; j < positioned; j++) {
             int pos_ind;
-	    	struct DxfFile pos_file;
-		    struct PointD offset, pos_offset;
+	    	struct DxfFileI pos_file;
+		    struct PointI offset, pos_offset;
 
 			pos_file = positions[j].file;
 				    	
@@ -302,7 +288,7 @@ static void recursive_move_x(double *x_pos, double *y_pos, struct DxfFile *curr_
 			pos_offset.x = positions[j].x;
 			pos_offset.y = positions[j].y;
 
-			res = cross_check(*curr_file, pos_file, offset, pos_offset);
+			res = cross_check_int(*curr_file, pos_file, offset, pos_offset);
 			if (res == 1)  
 			   	break;
         }
@@ -318,19 +304,26 @@ static void recursive_move_x(double *x_pos, double *y_pos, struct DxfFile *curr_
            
 }
 
-static int check_position(struct DxfFile curr_file, struct Position *positions, int positioned, double x_pos, double y_pos, double g_x, 
-                            double g_y, double *mg_y, double *mg_x)
+static int check_position(struct DxfFileI curr_file, struct PositionI *positions, int positioned, int x_pos, int y_pos, int g_x, 
+                            int g_y, int *mg_y, int *mg_x)
 {
     int res = 0;
+    int y_curr, x_curr, x_prev, y_prev;
+
     if (curr_file.y_max + y_pos > height)				
 	    return 0;
-
 
     if (x_pos + curr_file.x_max > width)
         return 0;
 
+    if (was_placed) {
+        x_prev = positions[positioned].x;
+        y_prev = positions[positioned].y + curr_file.y_max;
+        y_curr = y_pos + curr_file.y_max;
+        x_curr = x_pos;
+    }
 
-    if (was_placed == 0 || g_y < *mg_y) {
+    if (was_placed == 0 || y_curr < y_prev) {
         res = 1;
         was_placed = 1;
         *mg_y = g_y;
@@ -338,8 +331,15 @@ static int check_position(struct DxfFile curr_file, struct Position *positions, 
     	positions[positioned].file = curr_file;
 	    positions[positioned].x = x_pos;
 		positions[positioned].y = y_pos;
-    } else if (g_y == *mg_y && (g_x < *mg_x)) {
+    } else if (y_curr == y_prev && (g_y < *mg_y)) {
         res =1;
+        *mg_x = g_x;
+        *mg_y = g_y;
+    	positions[positioned].file = curr_file;
+	    positions[positioned].x = x_pos;
+		positions[positioned].y = y_pos;
+    } else if (y_curr == y_prev && g_y == *mg_y && (g_x < *mg_x)) {
+        res = 1;
         *mg_x = g_x;
     	positions[positioned].file = curr_file;
 	    positions[positioned].x = x_pos;
@@ -349,15 +349,16 @@ static int check_position(struct DxfFile curr_file, struct Position *positions, 
     return res;
 }
 
-static void generate_first_individ(struct DxfFile *dataset, int dataset_size)
+static void generate_first_individ(struct DxfFileI *dataset, int dataset_size)
 {
 	int i, j, k, m, genom_size; 
 	int max_position, positioned;
-	double curr_height;
-	struct Position *positions;
+	int curr_height;
+	struct PositionI *positions;
 	
 	max_position = dataset_size;
-	positions = (struct Position*)malloc(sizeof(struct Position) * max_position);
+	positions = (struct PositionI*)malloc(sizeof(struct PositionI) * max_position);
+    mask = calloc(dataset_size, sizeof(int));
 		
     curr_height = 0;
 
@@ -368,22 +369,24 @@ static void generate_first_individ(struct DxfFile *dataset, int dataset_size)
 
 	for (i = 0; i < dataset_size; i++) {
 		int res;
-		double mg_y, mg_x, x, y;
-		struct DxfFile curr_file;
+		int mg_y, mg_x, x, y;
+		struct DxfFileI curr_file;
+
+        if (mask[i] == 1) 
+            continue;
 					
-		curr_file = filedup(dataset[i]);
+		curr_file = filedup_int(dataset[i]);
         mg_y = -1;
 	    
         was_placed = 0;
 		for (x = 0.0; x <= width; x += 1.0) {
-            double x_pos, y_pos, g_x, g_y;
-            //printf ("x=%f\n", x);
+            int x_pos, y_pos, g_x, g_y;
 			res = 0;
 			for (y = height; y >= 0; y -= 1.0) {
 				for (j = 0; j < positioned; j++) {
 					int pos_ind;
-					struct DxfFile pos_file;
-					struct PointD offset, pos_offset;
+					struct DxfFileI pos_file;
+					struct PointI offset, pos_offset;
 
 					pos_file = positions[j].file;
 					
@@ -392,7 +395,7 @@ static void generate_first_individ(struct DxfFile *dataset, int dataset_size)
 					pos_offset.x = positions[j].x;
 					pos_offset.y = positions[j].y;
 
-					res = cross_check(curr_file, pos_file, offset, pos_offset);
+					res = cross_check_int(curr_file, pos_file, offset, pos_offset);
 					if (res == 1)  
 						break;
 				}
@@ -408,27 +411,9 @@ static void generate_first_individ(struct DxfFile *dataset, int dataset_size)
 					continue;*/
 
 				g_x = curr_file.polygon.gravity_center.x + x_pos;
-				g_y = curr_file.polygon.gravity_center.y + y;
+				g_y = curr_file.polygon.gravity_center.y + y_pos;
 
                 check_position(curr_file, positions, positioned, x_pos, y_pos, g_x, g_y, &mg_y, &mg_x);
-                			
-              /*  if (x_pos + curr_file.x_max > width)
-                    continue;
-
-                if (was_placed == 0 || g_y < mg_y) {
-                    was_placed = 1;
-                    mg_y = g_y;
-                    mg_x = g_x;
-    				positions[positioned].file = curr_file;
-	    			positions[positioned].x = x_pos;
-		    		positions[positioned].y = y_pos;
-                } else if (g_y == mg_y && (g_x < mg_x)) {
-                    mg_x = g_x;
-    				positions[positioned].file = curr_file;
-	    			positions[positioned].x = x_pos;
-		    		positions[positioned].y = y_pos;
-                }*/
-
                 
                 if (y == 0) {
                     x = width * 2;
@@ -445,7 +430,8 @@ static void generate_first_individ(struct DxfFile *dataset, int dataset_size)
 
         if (!was_placed) 
             continue;
-
+        
+        mask[i] = 1;
 		positioned++;
 
         if (positioned == 1)
@@ -458,13 +444,13 @@ static void generate_first_individ(struct DxfFile *dataset, int dataset_size)
 		printf("positioned = %d n %s\n", positioned, positions[positioned - 1].file.path);
 		if (positioned == max_position) {					
 			max_position *= 2;
-			positions = (struct Position*)realloc(positions, sizeof(struct Position) * max_position);
+			positions = (struct PositionI*)realloc(positions, sizeof(struct PositionI) * max_position);
 		}
 
         curr_height = (curr_height > positions[positioned - 1].y + curr_file.y_max)? curr_height : positions[positioned - 1].y + curr_file.y_max;
 	}
 
-    min_height = (min_height < curr_height)? min_height : curr_height;
+    min_height = curr_height;
     individs[0].height = curr_height;
 
     n_individs = 1;
@@ -472,7 +458,7 @@ static void generate_first_individ(struct DxfFile *dataset, int dataset_size)
 	printf("positioned = %d\n", positioned);
 	n_positioned = positioned;
 
-    draw_nested(positions);
+  //  draw_nested(positions);
 }
 
 static void mutate_individ(int n, int genom_size)
@@ -504,11 +490,11 @@ static void mutate_individ(int n, int genom_size)
 
 }
 
-static struct DxfFile* generate_dataset(struct DxfFile *dxf_files, int f_count, int *dataset_size)
+static struct DxfFileI* generate_dataset(struct DxfFileI *dxf_files, int f_count, int *dataset_size)
 {
     int i, j, k;
     int size;
-    struct DxfFile *dataset;
+    struct DxfFileI *dataset;
 
     size = 0;
     for (i = 0; i < f_count; i++) {
@@ -516,27 +502,27 @@ static struct DxfFile* generate_dataset(struct DxfFile *dxf_files, int f_count, 
     }
 
     *dataset_size = size;
-    dataset = (struct DxfFile*)malloc(sizeof(struct DxfFile) * size); 
+    dataset = (struct DxfFileI*)malloc(sizeof(struct DxfFileI) * size); 
     
     for (i = 0, k = 0; i < f_count; i++) {
         for (j = 0; j < dxf_files[i].how_many; j++, k++) {
-            dataset[k] = filedup(dxf_files[i]);
+            dataset[k] = filedup_int(dxf_files[i]);
         }
     }
 
     return dataset;
 }
 
-static int calculate_individ_height(struct Individ individ, struct DxfFile *dataset, int draw)
+static int calculate_individ_height(struct Individ individ, struct DxfFileI *dataset, int draw)
 {
 	int i, j, k, m, genom_size; 
 	int max_position, positioned;
-	double curr_height;
-    double angle_step;
-	struct Position *positions;
+	int curr_height;
+    int angle_step;
+	struct PositionI *positions;
 	
 	max_position = individ.genom_size;
-	positions = (struct Position*)malloc(sizeof(struct Position) * max_position);
+	positions = (struct PositionI*)malloc(sizeof(struct PositionI) * max_position);
 	
     curr_height = 0;
 
@@ -545,25 +531,25 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
     angle_step = 15;
 	for (i = 0; i < individ.genom_size; i++) {
 		int res, index;
-		double x, y, mg_x, mg_y, angle, min_angle;
-		struct DxfFile curr_file;
+		int x, y, mg_x, mg_y, angle, min_angle;
+		struct DxfFileI curr_file;
 					
         index = individ.genom[i];
 	    
         was_placed = 0;
         for (angle = 0.0; angle < 360; angle += angle_step) {
-            curr_file = filedup(dataset[index]);
+            curr_file = filedup_int(dataset[index]);
             if (angle > 0) 
-                rotate_polygon(&curr_file, angle);
+                rotate_polygon_int(&curr_file, (double)angle);
            
 	    	for (x = 0.0; x <= width; x += 1.0) {
-                double x_pos, y_pos, g_x, g_y;
+                int x_pos, y_pos, g_x, g_y;
 	    		res = 0;
     			for (y = height; y >= 0; y -= 1.0) {
 		    		for (j = 0; j < positioned; j++) {
 		    			int pos_ind;
-	    				struct DxfFile pos_file;
-    					struct PointD offset, pos_offset;
+	    				struct DxfFileI pos_file;
+    					struct PointI offset, pos_offset;
 
 				    	pos_file = positions[j].file;
 					
@@ -572,7 +558,7 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
 	    				pos_offset.x = positions[j].x;
     					pos_offset.y = positions[j].y;
 
-					    res = cross_check(curr_file, pos_file, offset, pos_offset);
+					    res = cross_check_int(curr_file, pos_file, offset, pos_offset);
 				    	if (res == 1)  
 			    			break;
 		    		}
@@ -583,68 +569,41 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
                     x_pos = x;
                     y_pos = y;
                     
-                 //   recursive_move_x(&x_pos, &y_pos, &curr_file, positions, positioned);
-                    	
-		    	/*	if (curr_file.y_max + y > height)				
-			    		continue;*/
-
     				g_x = curr_file.polygon.gravity_center.x + x_pos;
-	    			g_y = curr_file.polygon.gravity_center.y + y;
+	    			g_y = curr_file.polygon.gravity_center.y + y_pos;
                     if (check_position(curr_file, positions, positioned, x_pos, y_pos, g_x, g_y, &mg_y, &mg_x))
                         min_angle = angle;
-
-                			
-                  /*  if (x_pos + curr_file.x_max > width)
-                        continue;
-
-                    if (was_placed == 0|| g_y < mg_y) {
-                        was_placed = 1;
-                        mg_y = g_y;
-                        mg_x = g_x;
-                        min_angle = angle;
-	    				positions[positioned].file = curr_file;
-		    			positions[positioned].x = x_pos;
-			    		positions[positioned].y = y;
-                    } else if (y == mg_y && (g_x < mg_x)) {
-                        min_angle = angle;
-                        mg_x = g_x;
-	    				positions[positioned].file = curr_file;
-		    			positions[positioned].x = x_pos;
-			    		positions[positioned].y = y;
-                    }*/
-
                 
                     if (y == 0) {
                         x = width * 2;
                         break;
                     }
 	    		}
-
+                
+                //x_pos = positions[positioned].x;
+                //y_pos = positions[positioned].y;
                 recursive_move_x(&x_pos, &y_pos, &curr_file, positions, positioned);
                 g_x = curr_file.polygon.gravity_center.x + x_pos;
-			    g_y = curr_file.polygon.gravity_center.y + y;
+			    g_y = curr_file.polygon.gravity_center.y + y_pos;
                 if (check_position(curr_file, positions, positioned, x_pos, y_pos, g_x, g_y, &mg_y, &mg_x))
                     min_angle = angle;
     		}
         }
-        
-    //    free_mask(mask, (int)width, (int)height);
 
         if (!was_placed) 
             continue;
 
-       // recursive_move_x(&x_pos, &y_pos, &curr_file, positions, positioned);
-
 		positioned++;
             
-		printf("positioned = %d angle=%f %s\n", positioned, min_angle, positions[positioned - 1].file.path);
+		printf("positioned = %d angle=%d %s\n", positioned, min_angle, positions[positioned - 1].file.path);
 		if (positioned == max_position) {					
 			max_position *= 2;
-			positions = (struct Position*)realloc(positions, sizeof(struct Position) * max_position);
+			positions = (struct PositionI*)realloc(positions, sizeof(struct PositionI) * max_position);
 		}
 
-        if (curr_height < positions[positioned - 1].file.y_max + positions[positioned - 1].y);
+        if (curr_height < positions[positioned - 1].file.y_max + positions[positioned - 1].y) 
             curr_height = positions[positioned - 1].file.y_max + positions[positioned - 1].y;
+        
 
 	}
     
@@ -652,11 +611,11 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
         curr_height = height * 2;
     min_height = (min_height < curr_height)? min_height : curr_height;
 	
-	printf("positioned = %d genom_szie=%d \n", positioned, individ.genom_size);
+	printf("positioned = %d genom_szie=%d curr_height=%d\n", positioned, individ.genom_size, curr_height);
 	n_positioned = positioned;
     
     if (draw)
-        draw_nested(positions);
+        draw_nested_int(positions);
 
     return curr_height;
 }
@@ -664,7 +623,7 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
 static void calculate_fitness()
 {
     int i;
-    double avg;
+    int avg;
     
     avg = 0.0;
     for (i = 0; i < n_individs; i++)
@@ -677,7 +636,7 @@ static void calculate_fitness()
             individs[i].fitness = HUGE_VAL;
             continue; 
         }*/
-        double alpha, beta, sigma;
+        int alpha, beta, sigma;
         alpha = avg / (avg - min_height);
         beta = (-1) * min_height * avg / (avg - min_height);
         sigma = avg;
@@ -714,7 +673,7 @@ static int individs_equal(struct Individ individ1, struct Individ individ2)
    return equal;
 }
 
-static int file_individs_equal(struct Individ individ1, struct Individ individ2, struct DxfFile *dataset)
+static int file_individs_equal(struct Individ individ1, struct Individ individ2, struct DxfFileI *dataset)
 {
     int i;
     
@@ -746,8 +705,10 @@ static int crossover(int i1, int i2)
     individs[n_individs].genom_size = individs[i1].genom_size;
 
     srand(time(NULL));
-    g1 = (int)rand % (individs[i1].genom_size - 1);
-    g2 = g1 + 1;;
+    //g1 = (int)rand % (individs[i1].genom_size - 1);
+    //g2 = g1 + 1;
+    g1 = individs[i1].genom_size / 2;
+    g2 = g1 + 1;
 
     individs[n_individs].genom[g1] = individs[i1].genom[g1];
     individs[n_individs].genom[g2] = individs[i1].genom[g2];
@@ -760,7 +721,7 @@ static int crossover(int i1, int i2)
             continue;
         }
 
-        if (individs[i2].genom[i] == individs[i1].genom[g1] || individs[i2].genom[i] == individs[i1].genom[g2])
+        if (individs[i2].genom[i] == individs[i1].genom[g1] || individs[i2].genom[i] == individs[i1].genom[g2]) 
             continue;
 
         individs[n_individs].genom[count] = individs[i2].genom[i];
@@ -817,23 +778,11 @@ static int crossover(int i1, int i2)
   
 }
 
-static long long int factorial(int n) 
-{
-    int out, i;
-
-    out = 1;
-    for (i = 1; i <= n; i++)
-        out *= i;
-
-    return out;
-}
-
-
-void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double w, double h)
+void start_nfp_nesting_int(struct DxfFileI *dxf_files, int f_count, int w, int h)
 {
     int i, j, k, dataset_size, unique;
-    struct DxfFile *dataset;
-    max_individs = 2048;
+    struct DxfFileI *dataset;
+    max_individs = 17000;
     n_individs = 0;
     width = w;
     height = h;
@@ -843,14 +792,15 @@ void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double w, double 
     individs = (struct Individ*)malloc(sizeof(struct Individ) * max_individs);
     dataset = generate_dataset(dxf_files, f_count, &dataset_size);
     printf("dataset_size=%d\n", dataset_size);
-    qsort(dataset, dataset_size, sizeof(struct DxfFile), dxf_cmp);
+    qsort(dataset, dataset_size, sizeof(struct DxfFileI), dxf_cmp);
     max_genom = dataset_size;
     
     generate_first_individ(dataset, dataset_size);
 
   //  return;
 
-    individs[0].height = calculate_individ_height(individs[0], dataset, 0);
+    individs[0].height = calculate_individ_height(individs[0], dataset, 1);
+    return;
 
    // return;
     
@@ -880,7 +830,7 @@ void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double w, double 
                 }
 
                 if (!file_equal) {
-                    individs[i].height = calculate_individ_height(individs[i], dataset, 0);
+                    individs[j].height = calculate_individ_height(individs[j], dataset, 0);
                 }
             }
         }
@@ -890,8 +840,9 @@ void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double w, double 
     printf("\n\n");
     printf("min_height=%f\n", min_height);
     calculate_fitness();
-    for (i = 0; i < 30; i++) {
+    for (i = 0; i < 50; i++) {
         int res, file_equal;
+        printf("GENERATION %d\n", i);
         qsort(individs, n_individs, sizeof(struct Individ), individs_cmp);
         for (j = 0; j < n_individs; j++) {
             printf("height=%f fitness=%f\n", individs[j].height, individs[j].fitness);
@@ -925,11 +876,19 @@ void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double w, double 
 
 
         for(j = 0; j < n_individs; j++) {
-            printf("gen%d: ", j);
+            int flag;
+            printf("ind%d: ", j);
+            flag = 0;
             for (k = 0; k < individs[j].genom_size; k++) {
+                flag = (individs[j].genom[k] > dataset_size)? 1 : 0;
                 printf("%d ", individs[j].genom[k]);
             }
+
             printf("\n");
+            if (flag == 1) {
+                printf("ERROR\n");
+                exit(1);
+            }
         }
         
         for (j = 1; j <= res; j++) {
@@ -942,13 +901,14 @@ void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double w, double 
                 }
             }
 
-            if (file_equal = 0)
+            if (!file_equal)
                 individs[n_individs - j].height = calculate_individ_height(individs[n_individs - j], dataset, 0);
         }
         calculate_fitness();
     }
-
+    
     qsort(individs, n_individs, sizeof(struct Individ), individs_cmp);
+    min_height = individs[0].height;
     printf("\n\n\n\n RESULT MIN_HEIGHT=%f FITNESS=%f\n", individs[0].height, individs[0].fitness);
     calculate_individ_height(individs[0], dataset, 1);
 }
