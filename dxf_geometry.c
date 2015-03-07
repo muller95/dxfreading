@@ -105,7 +105,8 @@ void move_to_zero(struct DxfFile *dxf_file)
 	dxf_file->x_max -= dxf_file->x_min;
 	dxf_file->y_max -= dxf_file->y_min;
 	dxf_file->m_width = dxf_file->x_max;
-	dxf_file->m_height = dxf_file->y_max;	
+	dxf_file->m_height = dxf_file->y_max;
+    printf("xmax=%f ymax=%f\n", dxf_file->x_max, dxf_file->y_max);	
 }
 
 static struct PointD get_start_point(struct DxfFile *dxf_file)

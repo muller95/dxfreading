@@ -106,7 +106,7 @@ static void read_entity(struct DxfFileI *dxf_file)
 	FILE *txt_file;
 
 	line = (char*)malloc(sizeof(char) * MAX_LINE_LENGTH);
-	dxf_file->primitives = (struct DxfPrimitive*)malloc(sizeof(struct DxfPrimitive) * dxf_file->n_primitives);
+	dxf_file->primitives = (struct DxfPrimitiveI*)malloc(sizeof(struct DxfPrimitiveI) * dxf_file->n_primitives);
 	dxf_file->str_count = (int*)malloc(sizeof(int) * dxf_file->n_primitives);
 	dxf_file->text_primitives = (struct TextPrimitive*)malloc(sizeof(struct TextPrimitive) * dxf_file->n_primitives);
 	dxf_file->types = (int*)malloc(sizeof(int) * dxf_file->n_primitives);	
@@ -159,9 +159,9 @@ static void find_control_dots(struct DxfFileI *dxf_file)
 	int count = 0, i = 0, n = 0, k = 0;
 	line = (char*)malloc(sizeof(char) * MAX_LINE_LENGTH);
 	dxf_file->n_controldots = (int*)malloc(sizeof(int) * dxf_file->n_primitives);
-	dxf_file->primitives = (struct DxfPrimitive*)malloc(sizeof(struct DxfPrimitive) * dxf_file->n_primitives);
+	dxf_file->primitives = (struct DxfPrimitiveI*)malloc(sizeof(struct DxfPrimitiveI) * dxf_file->n_primitives);
 	for (i = 0; i < dxf_file->n_primitives; i++)
-		dxf_file->primitives[i].points = (struct PointD*)malloc(sizeof(struct PointD) * dxf_file->str_count[i]);
+		dxf_file->primitives[i].points = (struct PointI*)malloc(sizeof(struct PointD) * dxf_file->str_count[i]);
 
 	for (i = 0; i < dxf_file->n_primitives; i++) {
 		n = 0;	

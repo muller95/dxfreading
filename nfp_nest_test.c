@@ -776,21 +776,10 @@ static int crossover(int i1, int i2)
   
 }
 
-static long long int factorial(int n) 
-{
-    int out, i;
-
-    out = 1;
-    for (i = 1; i <= n; i++)
-        out *= i;
-
-    return out;
-}
-
-
 void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double w, double h)
 {
     int i, j, k, dataset_size, unique;
+    double no_rotation, first;
     struct DxfFile *dataset;
     max_individs = 17000;
     n_individs = 0;
@@ -801,15 +790,17 @@ void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double w, double 
 
     individs = (struct Individ*)malloc(sizeof(struct Individ) * max_individs);
     dataset = generate_dataset(dxf_files, f_count, &dataset_size);
-    printf("dataset_size=%d\n", dataset_size);
+    printf("f_count=%d dataset_size=%d\n", f_count, dataset_size);
     qsort(dataset, dataset_size, sizeof(struct DxfFile), dxf_cmp);
     max_genom = dataset_size;
     
     generate_first_individ(dataset, dataset_size);
+    no_rotation = individs[0].height;
 
   //  return;
 
     individs[0].height = calculate_individ_height(individs[0], dataset, 0);
+    first = individs[0].height;
 
    // return;
     
@@ -918,6 +909,6 @@ void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double w, double 
     
     qsort(individs, n_individs, sizeof(struct Individ), individs_cmp);
     min_height = individs[0].height;
-    printf("\n\n\n\n RESULT MIN_HEIGHT=%f FITNESS=%f\n", individs[0].height, individs[0].fitness);
+    printf("\n\n\n\n RESULT MIN_HEIGHT=%f FITNESS=%f no_rotation=%f first=%f\n", individs[0].height, individs[0].fitness, no_rotation, first);
     calculate_individ_height(individs[0], dataset, 1);
 }

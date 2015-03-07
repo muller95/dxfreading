@@ -24,7 +24,7 @@ struct DxfFileI filedup_int(struct DxfFileI source)
     }
 
     dest.polygon.n_points = source.polygon.n_points;
-    dest.polygon.points = (struct PointD*)malloc(sizeof(struct PointD) * source.polygon.n_points);
+    dest.polygon.points = (struct PointI*)malloc(sizeof(struct PointI) * source.polygon.n_points);
     dest.polygon.gravity_center.x = source.polygon.gravity_center.x;
     dest.polygon.gravity_center.y = source.polygon.gravity_center.y;
 

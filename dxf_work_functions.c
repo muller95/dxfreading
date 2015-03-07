@@ -39,19 +39,7 @@ struct DxfFile filedup(struct DxfFile source)
     for (i = 0; i < source.n_types; i++) 
         dest.types[i] = source.types[i];
 
-    dest.text_primitives = (struct TextPrimitive*)malloc(sizeof(struct TextPrimitive) * source.n_primitives);
-    dest.str_count = (int*)malloc(sizeof(int) * source.n_primitives);
-
-    for (i = 0; i < source.n_primitives; i++) {
-        dest.text_primitives[i].lines = (char**)malloc(sizeof(char*) * source.str_count[i]);
-        dest.str_count[i] = source.str_count[i];
-
-        for (j = 0; j < source.str_count[i]; j++)
-            dest.text_primitives[i].lines[j] = strdup(source.text_primitives[i].lines[j]);
-    }
-
     dest.max_types = source.max_types;
-    dest.max_lines = source.max_lines;
 
     dest.m_height = source.m_height;
     dest.m_width = source.m_width;

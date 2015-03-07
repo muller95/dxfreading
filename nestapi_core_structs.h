@@ -11,6 +11,11 @@ struct Rectangle {
 	double x, y, width, height;
 };
 
+
+struct TextPrimitive {
+	char **lines;
+};
+
 struct Polygon {
 	struct PointD *points;
 	struct PointD gravity_center;
@@ -22,19 +27,14 @@ struct DxfPrimitive {
 	int type;
 };
 
-struct TextPrimitive {
-	char **lines;
-};
-
 struct DxfFile {
 	char *path;
-	struct TextPrimitive *text_primitives;
 	struct DxfPrimitive *primitives;
 	struct Polygon polygon;
 	int n_primitives, n_types;
     int how_many; 
 	int max_types, max_lines; 
-	int *n_controldots, *str_count, *types;
+	int *n_controldots, *types;
 	double m_height, m_width; 
 	double x_min, x_max, y_min, y_max;
 };
