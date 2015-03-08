@@ -14,7 +14,7 @@ static int *mask;
 
 struct Individ *individs;
 
-void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double w, double h);
+void start_nfp_nesting_mt(struct DxfFile *dxf_files, int f_count, double w, double h);
 
 static int check_position(struct DxfFile curr_file, struct Position *positions, int positioned, double x_pos, double y_pos, double g_x, 
                             double g_y, double *mg_y, double *mg_x);
@@ -122,7 +122,7 @@ static gboolean on_draw_nested_signal(GtkWidget *widget, cairo_t *cr, gpointer u
 	return FALSE;	
 }
 
-void draw_nested(struct Position *positions)
+static void draw_nested(struct Position *positions)
 {
 
 	GtkWidget *view_window, *draw_area;
@@ -776,7 +776,7 @@ static int crossover(int i1, int i2)
   
 }
 
-void start_nfp_nesting(struct DxfFile *dxf_files, int f_count, double w, double h)
+void start_nfp_nesting_mt(struct DxfFile *dxf_files, int f_count, double w, double h)
 {
     int i, j, k, dataset_size, unique;
     double no_rotation, first;

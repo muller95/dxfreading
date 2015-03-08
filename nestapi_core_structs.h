@@ -64,5 +64,3 @@ struct LinearFigureD {
     struct LinearPrimitiveD *primitives;
     int n_primitives;
 };
-
-#include "nestapi_core_structs_int.h"
