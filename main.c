@@ -82,7 +82,7 @@ void on_subitem_nest_click (GtkWidget *widget, gpointer user_data)
 
 void on_subitem_nest1_click (GtkWidget *widget, gpointer user_data)
 {
-	start_nfp_nesting(dxf_files, f_count, 800, 800);
+	start_nfp_nesting_mt(dxf_files, f_count, 800, 800);
 }
 
 int check_if_opened(char *path)
