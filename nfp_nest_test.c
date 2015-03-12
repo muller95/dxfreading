@@ -319,10 +319,10 @@ static int check_position(struct DxfFile curr_file, struct Position *positions, 
     if (x_pos + curr_file.x_max > width)
         return 0;
     
-    pthread_mutex_lock(&position_mutex);
+    //pthread_mutex_lock(&position_mutex);
     if (was_placed) {
         x_prev = positions[positioned].x;
-        y_prev = positions[positioned].y + curr_file.y_max;
+        y_prev = positions[positioned].y + positioned[positioned].file.y_max;
         y_curr = y_pos + curr_file.y_max;
         x_curr = x_pos;
         *mg_x = positions[positioned].file.polygon.gravity_center.x + positions[positioned].x;
@@ -351,7 +351,7 @@ static int check_position(struct DxfFile curr_file, struct Position *positions, 
 	    positions[positioned].x = x_pos;
 		positions[positioned].y = y_pos;
     }
-    pthread_mutex_unlock(&position_mutex);
+    //pthread_mutex_unlock(&position_mutex);
     
     return res;
 }
@@ -389,9 +389,29 @@ static void generate_first_individ(struct DxfFile *dataset, int dataset_size)
 	    
         was_placed = 0;
 		for (x = 0.0; x <= width; x += 1.0) {
-            double x_pos, y_pos, g_x, g_y;
+            double x_pos, y_pos, g_x, g_y, y_start;
 			res = 0;
-			for (y = height; y >= 0; y -= 1.0) {
+
+            y_start = height;
+           /* for (j = 0; j < positioned; j++) {
+                double xl1, xr1, xl2, xr2, y_curr;
+
+                xl1 = positions[j].x;
+                xr1 = positions[j].x + positions[j].file.x_max;
+            
+                xl2 = x;
+                xr2 = x + curr_file.x_max;
+
+
+                if (xl1 > xr2  || xl2 > xr1)
+                continue;
+
+                y_curr = positions[j].file.y_max + positions[j].y;
+               y_start = (y_curr > y_start)? y_curr : y_start;
+           }
+
+            y_start = trunc(y_start + 0.5);*/
+			for (y = y_start; y >= 0; y -= 1.0) {
 				for (j = 0; j < positioned; j++) {
 					int pos_ind;
 					struct DxfFile pos_file;
@@ -522,17 +542,62 @@ static struct DxfFile* generate_dataset(struct DxfFile *dxf_files, int f_count, 
     return dataset;
 }
 
+static int check_position_thread(struct DxfFile curr_file, double x_pos, double y_pos, double *x_prev, double *y_prev, 
+                                    double g_x, double g_y, double *mg_x, double *mg_y, int *thread_placed)
+{
+    int res = 0;
+    double my_curr, mx_curr, mx_prev, my_prev;
+
+    if (curr_file.y_max + y_pos > height)				
+	    return 0;
+
+    if (x_pos + curr_file.x_max > width)
+        return 0;
+    
+    pthread_mutex_lock(&position_mutex);
+    if (*thread_placed) {
+        my_curr = y_pos + curr_file.y_max;
+        mx_curr = x_pos;
+        my_prev = *y_prev + curr_file.y_max;
+        mx_prev = *x_prev;
+
+    }
+
+    if (*thread_placed == 0 || my_curr < my_prev) {
+        res = 1;
+        *thread_placed = 1;
+        *y_prev = y_pos;
+        *x_prev = x_pos;
+        *mg_y = g_y;
+        *mg_x = g_x;
+    } else if (my_curr == my_prev && (g_y < *mg_y)) {
+        res =1;
+        *x_prev = x_pos;
+        *mg_x = g_x;
+        *mg_y = g_y;
+    } else if (my_curr == my_prev && g_y == *mg_y && (g_x < *mg_x)) {
+        res = 1;
+        *mg_x = g_x;
+        *x_prev = x_pos;
+    }
+    pthread_mutex_unlock(&position_mutex);
+    
+    return res;
+
+}
+
 static void *position_angles(void *data)
 {
-    int positioned, j;
+    int positioned, j, thread_placed;
     double mg_x, mg_y, x, y, angle;
+    double x_prev, y_prev;
     struct Position *positions;
     struct DxfFile curr_file;
 
     positions = (struct Position*)data;
     curr_file = filedup(for_rotate);
     positioned = n_positioned;
-    
+   
     //printf("started thread\n");
     pthread_mutex_lock(&angle_mutex);
     thread_started_glob += 1;
@@ -547,11 +612,32 @@ static void *position_angles(void *data)
     }
 
  //   printf("start pos\n"); 
+    thread_placed = 0;
 	for (x = 0.0; x <= width; x += 1.0) {
         int res;
-        double x_pos, y_pos, g_x, g_y;
+        double x_pos, y_pos, g_x, g_y, y_start;
 	    res = 0;
-    	for (y = height; y >= 0; y -= 1.0) {
+        
+        y_start = height;
+     /*   for (j = 0; j < positioned; j++) {
+            double xl1, xr1, xl2, xr2, y_curr;
+
+            xl1 = positions[j].x;
+            xr1 = positions[j].x + positions[j].file.x_max;
+            
+            xl2 = x;
+            xr2 = x + curr_file.x_max;
+
+
+            if (xl1 > xr2  || xl2 > xr1)
+                continue;
+
+            y_curr = positions[j].file.y_max + positions[j].y;
+            y_start = (y_curr > y_start)? y_curr : y_start;
+        }
+
+        y_start = trunc(y_start + 0.5);*/
+    	for (y = y_start; y >= 0; y -= 1.0) {
 			for (j = 0; j < positioned; j++) {
 				int pos_ind;
 	    		struct DxfFile pos_file;
@@ -579,7 +665,7 @@ static void *position_angles(void *data)
 	    		g_y = curr_file.polygon.gravity_center.y + y_pos;
 
 
-                if (check_position(curr_file, positions, positioned, x_pos, y_pos, g_x, g_y, &mg_y, &mg_x))
+                if (check_position_thread(curr_file, x_pos, y_pos, &x_prev, &y_prev, g_x, g_y, &mg_x, &mg_y, &thread_placed))
                     min_angle = angle;
               
                 if (y == 0) {
@@ -594,18 +680,49 @@ static void *position_angles(void *data)
         if (check_position(curr_file, positions, positioned, x_pos, y_pos, g_x, g_y, &mg_y, &mg_x))
             min_angle = angle;
    	}
- //   printf("end pos\n");
-    
-    pthread_mutex_lock(&finished_mutex);
-    thread_finished++;
-//    printf("finished=%d\n", thread_finished);
-    pthread_mutex_unlock(&finished_mutex);
+
+    if (thread_placed) {
+        double mx_prev, my_prev, mx_curr, my_curr, mg_x, mg_y, g_x, g_y;
+        pthread_mutex_lock(&position_mutex);
+
+
+        if (was_placed) {
+            mx_prev = positions[positioned].x;
+            my_prev = positions[positioned].y + positions[positioned].file.y_max;
+            my_curr = y_prev + curr_file.y_max;
+            mx_curr = x_prev;
+            mg_x = positions[positioned].file.polygon.gravity_center.x + positions[positioned].x;
+            mg_y = positions[positioned].file.polygon.gravity_center.y + positions[positioned].y;
+            g_x = curr_file.polygon.gravity_center.x + x_prev;
+	    	g_y = curr_file.polygon.gravity_center.y + y_prev;
+
+        }   
+
+        if (was_placed == 0 || my_curr < my_prev) {
+            was_placed = 1;
+     	    positions[positioned].file = curr_file;
+	        positions[positioned].x = x_prev;
+    		positions[positioned].y = y_prev;
+        } else if (my_curr == my_prev && (g_y < mg_y)) {
+        	positions[positioned].file = curr_file;
+    	    positions[positioned].x = x_prev;
+    		positions[positioned].y = y_prev;
+        } else if (my_curr == my_prev && g_y == mg_y && (g_x < mg_x)) {
+        	positions[positioned].file = curr_file;
+    	    positions[positioned].x = x_prev;
+    		positions[positioned].y = y_prev;
+        }
+
+
+        pthread_mutex_unlock(&position_mutex);
+    }
 }
 
 static int calculate_individ_height(struct Individ individ, struct DxfFile *dataset, int draw)
 {
-	int i, j, k, m, genom_size; 
+	int i, j, k, m, genom_size, thread_max; 
 	int max_position, positioned;
+    pthread_t thread_ids[24];
 	struct Position *positions;
 	
     curr_height = 0;
@@ -616,13 +733,14 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
     n_positioned = 0;
     curr_height = 0;
 	positioned = 0;    
-    angle_step = 5;
+    angle_step = 45;
+
+    thread_max = (int)(360 / angle_step);
 
 	for (i = 0; i < individ.genom_size; i++) {
 		int index, thread_started, err;
 		double angle;
 		struct DxfFile curr_file;
-        pthread_t thread;
 					
         index = individ.genom[i];	    
         for_rotate = filedup(dataset[index]);
@@ -631,16 +749,19 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
         thread_started_glob = 0;
         thread_finished = 0;
         was_placed = 0;
-        for (angle = 0.0; angle < 360; angle += angle_step) {
-            err = pthread_create(&thread, NULL, position_angles, positions);
+        for (j = 0; j < thread_max; j++) {
+            err = pthread_create(&thread_ids[j], NULL, position_angles, positions);
             if (err != 0) {
                 printf("THREAD ERROR %s\n", strerror(err));
                 exit(1);
             }
             thread_started++;  
         }
-        
-        while (thread_finished < thread_started);
+
+        printf("pthread_started=%d\n", thread_started);
+
+        for (j = 0; j < thread_max; j++) 
+            pthread_join(thread_ids[j], NULL);        
 
         if (!was_placed) 
             continue;
@@ -859,9 +980,9 @@ void start_nfp_nesting_mt(struct DxfFile *dxf_files, int f_count, double w, doub
 
  //   return;
 
-    individs[0].height = calculate_individ_height(individs[0], dataset, 0);
+    individs[0].height = calculate_individ_height(individs[0], dataset, 1);
     first = individs[0].height;
-  //  return;
+    //return;
 
    // return;
     
