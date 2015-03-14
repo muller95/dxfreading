@@ -322,7 +322,7 @@ static int check_position(struct DxfFile curr_file, struct Position *positions, 
     //pthread_mutex_lock(&position_mutex);
     if (was_placed) {
         x_prev = positions[positioned].x;
-        y_prev = positions[positioned].y + positioned[positioned].file.y_max;
+        y_prev = positions[positioned].y + positions[positioned].file.y_max;
         y_curr = y_pos + curr_file.y_max;
         x_curr = x_pos;
         *mg_x = positions[positioned].file.polygon.gravity_center.x + positions[positioned].x;
@@ -554,7 +554,7 @@ static int check_position_thread(struct DxfFile curr_file, double x_pos, double 
     if (x_pos + curr_file.x_max > width)
         return 0;
     
-    pthread_mutex_lock(&position_mutex);
+  //  pthread_mutex_lock(&position_mutex);
     if (*thread_placed) {
         my_curr = y_pos + curr_file.y_max;
         mx_curr = x_pos;
@@ -580,7 +580,7 @@ static int check_position_thread(struct DxfFile curr_file, double x_pos, double 
         *mg_x = g_x;
         *x_prev = x_pos;
     }
-    pthread_mutex_unlock(&position_mutex);
+ //   pthread_mutex_unlock(&position_mutex);
     
     return res;
 
@@ -665,8 +665,8 @@ static void *position_angles(void *data)
 	    		g_y = curr_file.polygon.gravity_center.y + y_pos;
 
 
-                if (check_position_thread(curr_file, x_pos, y_pos, &x_prev, &y_prev, g_x, g_y, &mg_x, &mg_y, &thread_placed))
-                    min_angle = angle;
+                check_position_thread(curr_file, x_pos, y_pos, &x_prev, &y_prev, g_x, g_y, &mg_x, &mg_y, &thread_placed);
+                //    min_angle = angle;
               
                 if (y == 0) {
                     x = width * 2;
@@ -700,14 +700,17 @@ static void *position_angles(void *data)
 
         if (was_placed == 0 || my_curr < my_prev) {
             was_placed = 1;
+            min_angle = angle;
      	    positions[positioned].file = curr_file;
 	        positions[positioned].x = x_prev;
     		positions[positioned].y = y_prev;
         } else if (my_curr == my_prev && (g_y < mg_y)) {
+            min_angle = angle;
         	positions[positioned].file = curr_file;
     	    positions[positioned].x = x_prev;
     		positions[positioned].y = y_prev;
         } else if (my_curr == my_prev && g_y == mg_y && (g_x < mg_x)) {
+            min_angle = angle;
         	positions[positioned].file = curr_file;
     	    positions[positioned].x = x_prev;
     		positions[positioned].y = y_prev;
@@ -733,7 +736,7 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
     n_positioned = 0;
     curr_height = 0;
 	positioned = 0;    
-    angle_step = 45;
+    angle_step = 15;
 
     thread_max = (int)(360 / angle_step);
 
@@ -980,7 +983,7 @@ void start_nfp_nesting_mt(struct DxfFile *dxf_files, int f_count, double w, doub
 
  //   return;
 
-    individs[0].height = calculate_individ_height(individs[0], dataset, 1);
+    individs[0].height = calculate_individ_height(individs[0], dataset, 0);
     first = individs[0].height;
     //return;
 
@@ -1022,7 +1025,7 @@ void start_nfp_nesting_mt(struct DxfFile *dxf_files, int f_count, double w, doub
     printf("\n\n");
     printf("min_height=%f\n", min_height);
     calculate_fitness();
-    for (i = 0; i < 10; i++) {
+    for (i = 0; i < 50; i++) {
         int res, file_equal;
         printf("GENERATION %d\n", i);
         qsort(individs, n_individs, sizeof(struct Individ), individs_cmp);
