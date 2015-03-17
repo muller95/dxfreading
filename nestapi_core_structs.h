@@ -1,3 +1,5 @@
+/*DXF_TYPE_LINE is a broken line from N points
+DXF_TYPE_SPLINE is a bezier curve with N controldots*/
 enum {
 	DXF_TYPE_LINE,
 	DXF_TYPE_SPLINE,
@@ -23,14 +25,19 @@ struct Polygon {
 };
 
 struct DxfPrimitive {
+	//points of primitive
 	struct PointD *points;
+	//type and number of control dots
 	int type, n_controldots;
 };
 
 struct DxfFile {
+	//path to file
 	char *path;
+	//primitives
 	struct DxfPrimitive *primitives;
 	struct Polygon polygon;
+	//number of primitives
 	int n_primitives;
     int how_many; 
 	double m_height, m_width; 
