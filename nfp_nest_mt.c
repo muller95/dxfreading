@@ -392,8 +392,8 @@ static void generate_first_individ(struct DxfFile *dataset, int dataset_size)
             double x_pos, y_pos, g_x, g_y, y_start;
 			res = 0;
 
-            y_start = height;
-           /* for (j = 0; j < positioned; j++) {
+            y_start = 0;
+            for (j = 0; j < positioned; j++) {
                 double xl1, xr1, xl2, xr2, y_curr;
 
                 xl1 = positions[j].x;
@@ -410,7 +410,7 @@ static void generate_first_individ(struct DxfFile *dataset, int dataset_size)
                y_start = (y_curr > y_start)? y_curr : y_start;
            }
 
-            y_start = trunc(y_start + 0.5);*/
+            y_start = trunc(y_start + 0.5);
 			for (y = y_start; y >= 0; y -= 1.0) {
 				for (j = 0; j < positioned; j++) {
 					int pos_ind;
@@ -554,7 +554,6 @@ static int check_position_thread(struct DxfFile curr_file, double x_pos, double 
     if (x_pos + curr_file.x_max > width)
         return 0;
     
-  //  pthread_mutex_lock(&position_mutex);
     if (*thread_placed) {
         my_curr = y_pos + curr_file.y_max;
         mx_curr = x_pos;
@@ -580,10 +579,8 @@ static int check_position_thread(struct DxfFile curr_file, double x_pos, double 
         *mg_x = g_x;
         *x_prev = x_pos;
     }
- //   pthread_mutex_unlock(&position_mutex);
     
     return res;
-
 }
 
 static void *position_angles(void *data)
@@ -598,28 +595,24 @@ static void *position_angles(void *data)
     curr_file = filedup(for_rotate);
     positioned = n_positioned;
    
-    //printf("started thread\n");
     pthread_mutex_lock(&angle_mutex);
     thread_started_glob += 1;
-   // printf("started=%d\n", thread_started_glob);
     angle = curr_angle;
     curr_angle += angle_step;
     pthread_mutex_unlock(&angle_mutex);
-  //  printf("finished angle\n");
 
     if (angle > 0) {
         rotate_polygon(&curr_file, angle);
     }
 
- //   printf("start pos\n"); 
     thread_placed = 0;
 	for (x = 0.0; x <= width; x += 1.0) {
         int res;
         double x_pos, y_pos, g_x, g_y, y_start;
 	    res = 0;
         
-        y_start = height;
-     /*   for (j = 0; j < positioned; j++) {
+        y_start = 0;
+        for (j = 0; j < positioned; j++) {
             double xl1, xr1, xl2, xr2, y_curr;
 
             xl1 = positions[j].x;
@@ -636,7 +629,7 @@ static void *position_angles(void *data)
             y_start = (y_curr > y_start)? y_curr : y_start;
         }
 
-        y_start = trunc(y_start + 0.5);*/
+        y_start = trunc(y_start + 0.5);
     	for (y = y_start; y >= 0; y -= 1.0) {
 			for (j = 0; j < positioned; j++) {
 				int pos_ind;
@@ -666,7 +659,6 @@ static void *position_angles(void *data)
 
 
                 check_position_thread(curr_file, x_pos, y_pos, &x_prev, &y_prev, g_x, g_y, &mg_x, &mg_y, &thread_placed);
-                //    min_angle = angle;
               
                 if (y == 0) {
                     x = width * 2;
@@ -734,7 +726,6 @@ static int calculate_individ_height(struct Individ individ, struct DxfFile *data
     n_positioned = 0;
     curr_height = 0;
 	positioned = 0;    
-    angle_step = 15;
 
     thread_max = (int)(360 / angle_step);
 
@@ -980,7 +971,8 @@ void start_nfp_nesting_mt(struct DxfFile *dxf_files, int f_count, double w, doub
     no_rotation = individs[0].height;
 
  //   return;
-
+	
+	angle_step = 45;
     individs[0].height = calculate_individ_height(individs[0], dataset, 0);
     first = individs[0].height;
     //return;

@@ -65,8 +65,6 @@ void rotate_polygon(struct DxfFile *dxf_file, double angle)
 
     dxf_file->x_min = 0;
     dxf_file->y_min = 0; 
-
-//    gravity_center_in_polygon(dxf_file);
 }
 
 void move_to_zero(struct DxfFile *dxf_file)
@@ -75,7 +73,7 @@ void move_to_zero(struct DxfFile *dxf_file)
 	int i = 0, j = 0;
 
 	for (j = 0; j < dxf_file->n_primitives; j++) {
-		for (i = 0; i < dxf_file->n_controldots[j]; i++) {
+		for (i = 0; i < dxf_file->primitives[j].n_controldots; i++) {
 			if (first) {
 				dxf_file->x_min = dxf_file->primitives[j].points[i].x;
 				dxf_file->y_min = dxf_file->primitives[j].points[i].y;
@@ -96,7 +94,7 @@ void move_to_zero(struct DxfFile *dxf_file)
 	}
 
 	for (j = 0; j < dxf_file->n_primitives; j++) {
-		for (i = 0; i < dxf_file->n_controldots[j]; i++) {
+		for (i = 0; i < dxf_file->primitives[j].n_controldots; i++) {
 			dxf_file->primitives[j].points[i].x -= dxf_file->x_min;
 			dxf_file->primitives[j].points[i].y -= dxf_file->y_min;
 		}
@@ -106,7 +104,6 @@ void move_to_zero(struct DxfFile *dxf_file)
 	dxf_file->y_max -= dxf_file->y_min;
 	dxf_file->m_width = dxf_file->x_max;
 	dxf_file->m_height = dxf_file->y_max;
-    printf("xmax=%f ymax=%f\n", dxf_file->x_max, dxf_file->y_max);	
 }
 
 static struct PointD get_start_point(struct DxfFile *dxf_file)
@@ -120,7 +117,7 @@ static struct PointD get_start_point(struct DxfFile *dxf_file)
 	
 	int i, j;
 	for (i = 0; i < dxf_file->n_primitives; i++) {
-		for (j = 0; j < dxf_file->n_controldots[i]; j++) {
+		for (j = 0; j < dxf_file->primitives[i].n_controldots; j++) {
 			x = dxf_file->primitives[i].points[j].x;
 			y = dxf_file->primitives[i].points[j].y;
 
@@ -163,7 +160,7 @@ void create_polygon_jarvis(struct DxfFile *dxf_file)
 	struct PointD start_p, curr_p, temp_p, next_p;
 
 	for (i = 0; i < dxf_file->n_primitives; i++) {
-		n_points += dxf_file->n_controldots[i];
+		n_points += dxf_file->primitives[i].n_controldots;
 	}
 	dxf_file->polygon.points = (struct PointD*)malloc(sizeof(struct PointD) * n_points);
 	points = dxf_file->polygon.points;
@@ -175,7 +172,7 @@ void create_polygon_jarvis(struct DxfFile *dxf_file)
 	do {
 		vector = get_vector(curr_p, temp_p);
 		for (i = 0; i < dxf_file->n_primitives; i++) {
-			for (j = 0; j < dxf_file->n_controldots[i]; j++) {
+			for (j = 0; j < dxf_file->primitives[i].n_controldots; j++) {
 				temp_p = dxf_file->primitives[i].points[j];
 				if (temp_p.x == curr_p.x && temp_p.y == curr_p.y)
 					continue;

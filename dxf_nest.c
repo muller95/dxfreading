@@ -21,7 +21,7 @@ static int cross_check(struct DxfFile curr_file, struct DxfFile pos_file, struct
 static void draw_spline(struct DxfFile *dxf_file, cairo_t *cr, int i)
 {
 	int k;
-	for (k = 0; k < dxf_file->n_controldots[i] - 2; k++) {
+	for (k = 0; k < dxf_file->primitives[i].n_controldots - 2; k++) {
 		double x1, y1, x2, y2, x3, y3;
 		x1 = dxf_file->primitives[i].points[k].x;
 		y1 = dxf_file->primitives[i].points[k].y;
@@ -38,8 +38,7 @@ static void draw_line(struct DxfFile *dxf_file, cairo_t *cr, int i)
 {
 	int k;
 
-	printf("%d\n", dxf_file->n_controldots[i]);	
-	for (k = 0; k < dxf_file->n_controldots[i] - 1; k++) {
+	for (k = 0; k < dxf_file->primitives[i].n_controldots - 1; k++) {
 		double x, y;
 		x = dxf_file->primitives[i].points[k].x;
 		y = dxf_file->primitives[i].points[k].y;	
@@ -61,8 +60,7 @@ static gboolean on_draw_signal(GtkWidget *widget, cairo_t *cr, gpointer user_dat
 	cairo_set_line_width(cr, 1);		
 	printf("%d\n", dxf_file->n_primitives);	
 	for (i = 0; i < dxf_file->n_primitives; i++) {
-		printf("%d\n", dxf_file->types[i]);	
-		for (k = 0; k < dxf_file->n_controldots[i] - 1; k++) {
+		for (k = 0; k < dxf_file->primitives[i].n_controldots - 1; k++) {
 			double x, y;
 			x = dxf_file->primitives[i].points[k].x;
 			y = dxf_file->primitives[i].points[k].y;	
@@ -123,7 +121,7 @@ static gboolean on_draw_nested_signal(GtkWidget *widget, cairo_t *cr, gpointer u
 		printf("%s\n", dxf_file.path);	
 		cairo_set_source_rgb(cr, 0, 0, 0);
 		for (i = 0; i < dxf_file.n_primitives; i++) {
-			for (k = 0; k < dxf_file.n_controldots[i] - 1; k++) {
+			for (k = 0; k < dxf_file.primitives[i].n_controldots - 1; k++) {
 				double x, y;
 				x = dxf_file.primitives[i].points[k].x + offset_x;
 				y = dxf_file.primitives[i].points[k].y + offset_y;	

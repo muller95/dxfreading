@@ -24,17 +24,15 @@ struct Polygon {
 
 struct DxfPrimitive {
 	struct PointD *points;
-	int type;
+	int type, n_controldots;
 };
 
 struct DxfFile {
 	char *path;
 	struct DxfPrimitive *primitives;
 	struct Polygon polygon;
-	int n_primitives, n_types;
+	int n_primitives;
     int how_many; 
-	int max_types, max_lines; 
-	int *n_controldots, *types;
 	double m_height, m_width; 
 	double x_min, x_max, y_min, y_max;
 };
