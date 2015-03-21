@@ -9,9 +9,6 @@ struct PointD {
 	double x, y;
 };
 
-struct Rectangle {
-	double x, y, width, height;
-};
 
 
 struct TextPrimitive {
@@ -58,11 +55,6 @@ struct Individ {
     int *genom;
     int genom_size;
     double height, fitness;
-};
-
-struct LinearPrimitivesD {
-    struct PointD *points;
-    int n_points;
 };
 
 struct LinearFigureD {
