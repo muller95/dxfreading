@@ -13,6 +13,7 @@ struct DxfPrimitive {
   struct Point *points;
   int type;
   int controldots;
+  struct DxfPrimitive *next;
 }
 
 struct LinearPrimitive {
@@ -22,7 +23,7 @@ struct LinearPrimitive {
 
 struct DxfFile {
   char *path;
-  int how_many;
+  int quant;
   struct DxfPrimitive *primitives;
 /*  Не помню, как назывались, и для чего нужны
   double my_height;
