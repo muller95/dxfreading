@@ -6,8 +6,12 @@
 
 #include "common_structs.h"
 
+#define ENTITIES "ENTITIES\n"
+#define ENDSECS "ENDSECS\n"
 
-void dxf_file_create(char *path, struct DxfFile *df, int quant)
+
+void
+dxf_file_create(char *path, struct DxfFile *df, int quant)
 {
 
   assert(path != NULL);
@@ -16,23 +20,37 @@ void dxf_file_create(char *path, struct DxfFile *df, int quant)
 
   FILE *fp;
   char *line;
-  int line_length;
+  int line_length, in_entities;
   ssize_t ch_read;
+  struct DxfPrimitive *dp;
 
   fp = fopen(path, "r");
   if (fp == NULL) {
     exit(EXIT_FAILURE);
   }
 
+  df->primitives = NULL;
   df->quant = quant;
-  df->path = (char *)calloc(strlen(path)+1, sizeof(char))
-  memcpy(df->path, path, strlen(path));
+  df->path = (char *)calloc(strlen(path)+1, sizeof(char));
+  memcpy(df->path, path, strlen(path)+1);
 
   line = NULL;
   line_length = 0;
+  in_entities = 0;
 
   while ((ch_read = getline(&line, &line_length, fp)) != -1) {
-    /* Do some magic fancy stuff w/ lines */
+
+    if (strcmp(line, ENTITIES)) {
+      in_entities = 1;
+      continue;
+    } else if (strcmp(line, ENDSECS)) {
+      in_entities = 0;
+      continue;
+    }
+
+    if (in_entities) {
+      /* Do some magic fancy stuff w/ entities */
+    }
   }
 
   free(line);
@@ -40,13 +58,14 @@ void dxf_file_create(char *path, struct DxfFile *df, int quant)
 }
 
 
-void dxf_file_destroy(struct DxfFile *df)
+void
+dxf_file_destroy(struct DxfFile *df)
 {
   assert(df != NULL);
 
-  DxfPrimitive *tmp, *cur;
+  struct DxfPrimitive *tmp, *cur;
 
-  free(path);
+  free(df->path);
 
   cur = df->primitives;
   while (cur != NULL) {
@@ -54,5 +73,7 @@ void dxf_file_destroy(struct DxfFile *df)
     cur = cur->next;
     free(tmp);
   }
+
+  df = NULL;
   
 }
