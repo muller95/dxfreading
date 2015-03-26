@@ -1,31 +1,45 @@
 
 /* Data structures for all functions */
 
-#define DXF_TYPE_LINE 0
-#define DXF_TYPE_SPLINE 1
+#ifndef _COMMON_STRUCTS_H_
+#define _COMMON_STRUCTS_H_
+
+#include "entities_structs.h"
 
 struct Point {
-	double x, y;
+  double x;
+  double y;
 };
 
-struct DxfPrimitive {
-  struct Point *points;
-  int type;
-  int npoints;
-  struct DxfPrimitive *next;
+struct LineData {
+  struct Point begin;
+  struct Point end;
 };
 
-struct LinearPrimitive {
-  struct Point *points;
-  int npoints;
-  int type;
+struct SplineData {
+  /* spline stuff */
+};
+
+/*
+struct CircleData {
+  
+};
+*/
+
+struct Primitive {
+  char *type;
+  void *data;
+  struct Primitive *next;
 };
 
 struct DxfFile {
   char *path;
-  int quant;
-  struct DxfPrimitive *primitives;
-  double height, width;
-  struct Point min, max;
+  int file_quant;
+  struct Primitive *primitives;
+  double height;
+  double width;
+  struct Point min;
+  struct Point max;
 };
 
+#endif /* _COMMON_STRUCTS_H_ */
