@@ -26,6 +26,11 @@ struct CircleData {
 };
 */
 
+struct LinearData {
+  Point *points;
+  int point_quant;
+}
+
 struct Primitive {
   char *type;
   void *data;
@@ -33,13 +38,17 @@ struct Primitive {
 };
 
 struct DxfFile {
-  char *path;
-  int file_quant;
+  char *resolved_path;
   struct Primitive *primitives;
-  double height;
-  double width;
+  int primitives_quant;
+};
+
+struct Linear {
+  char *id;
+  struct Primitive *primitives;
+  struct Point mass_center;
   struct Point min;
   struct Point max;
-};
+}
 
 #endif /* _COMMON_STRUCTS_H_ */

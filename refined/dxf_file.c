@@ -89,7 +89,7 @@ dxf_file_open(char *path, int file_quant)
       }
     }
 
-  free(stripped);  
+    free(stripped);  
   }
 
   free(line);
@@ -191,9 +191,9 @@ fill_primitive(struct Primitive *prm, char *line, FILE *fp)
   assert(line != NULL);
   assert(fp != NULL);
 
-  if (prm->type == entity_line.string) {
+  if (strcmp(prm->type, entity_line.string) == 0) {
     prm->data = get_line(line, fp);
-  } else if (prm->type == entity_spline.string) {
+  } else if (strcmp(prm->type == entity_spline.string) == 0) {
     prm->data = get_spline(line, fp);
   } else {
     /* need to somehow inform a caller */
