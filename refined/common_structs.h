@@ -11,6 +11,8 @@ struct Point {
   double y;
 };
 
+/* Primitive data structures */
+
 struct LineData {
   struct Point begin;
   struct Point end;
@@ -27,9 +29,11 @@ struct CircleData {
 */
 
 struct LinearData {
-  Point *points;
+  struct Point *points;
   int point_quant;
-}
+};
+
+/* ---------- */
 
 struct Primitive {
   char *type;
@@ -49,6 +53,6 @@ struct Linear {
   struct Point mass_center;
   struct Point min;
   struct Point max;
-}
+};
 
 #endif /* _COMMON_STRUCTS_H_ */
