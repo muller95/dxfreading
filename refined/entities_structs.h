@@ -7,11 +7,6 @@
 #define ENTITIES "ENTITIES"
 #define ENDSEC "ENDSEC"
 
-#define NEW_ENTITY "0"
-#define HANDLE "5"
-#define ENTITY_DATA "AcDbEntity"
-#define DIVIDER "100"
-
 struct entity_line_t {
   char *string;
   char *dbsect;

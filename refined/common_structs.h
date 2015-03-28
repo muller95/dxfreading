@@ -6,6 +6,11 @@
 
 #include "entities_structs.h"
 
+#define NEW_ENTITY "0"
+#define HANDLE "5"
+#define ENTITY_DATA "AcDbEntity"
+#define DIVIDER "100"
+
 struct Point {
   double x;
   double y;
@@ -22,12 +27,6 @@ struct SplineData {
   /* spline stuff */
 };
 
-/*
-struct CircleData {
-  
-};
-*/
-
 struct LinearData {
   struct Point *points;
   int point_quant;
@@ -35,16 +34,21 @@ struct LinearData {
 
 /* ---------- */
 
-struct Primitive {
+struct Header {
+  
+};
+
+struct Entity {
   char *type;
   void *data;
-  struct Primitive *next;
+  struct Entity *next;
 };
 
 struct DxfFile {
   char *resolved_path;
-  struct Primitive *primitives;
-  int primitives_quant;
+  struct Header header;
+  struct Entity *entities;
+  int entities_quant;
 };
 
 struct Linear {

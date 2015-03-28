@@ -3,6 +3,7 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,24 +13,21 @@
 
 static char * strip_str(char *);
 static int is_entity(char *);
-static struct Primitive * fill_primitive(char *, FILE *);
-static int destroy_primitive(struct Primitive *prm);
+static struct Entity * entity_fill(char *, FILE *);
+static int entity_destroy(struct Entity *ent);
 
 static struct LineData * get_line(FILE *);
 static struct SplineData * get_spline(FILE *);
 
 struct entity_line_t entity_line = {"LINE", "AcDbLine", "10", "20", "11", "21"};
 struct entity_spline_t entity_spline = {"SPLINE", "AcDbSpline", "10", "20", "40", "72", "73"};
-/*
-struct entity_circle_t entity_circle = {"CIRCLE", "10", "20", "40"};
-*/
 
 
 /*
   dxf_file_open: creates a DxfFile structure
 
   path: path to .dxf file.
-  Note, if we open a link, we will save path *in* link, not path *of* link.
+  Note, if we open a link, we will save path _in_ link, not path _of_ link.
 */
 struct DxfFile *
 dxf_file_open(char *path)
@@ -37,26 +35,29 @@ dxf_file_open(char *path)
   assert(path != NULL);
 
   FILE *fp;
-  char *line, *stripped;
+  char *line, *stripped, *resolved_path;
   int in_entities;
   size_t line_length;
   ssize_t ch_read;
-  struct Primitive *prm, *cur;
+  struct Entity *prm, *cur;
   struct DxfFile *df;
 
-  /* TODO: check for links, we identificate Linear by path
-           Gonna use realpath() (man 3 realpath)
-   */
+  resolved_path = canonicalize_file_name(path);
 
-  fp = fopen(path, "r");
-  if (fp == NULL) {
+  if (resolved_path == NULL) {
+    resolved_path = (char *)calloc(strlen(path)+1, sizeof(char));
+    memcpy(resolved_path, path, strlen(path)+1);
+  }
+
+  if ((fp = fopen(resolved_path, "r")) == NULL) {
     return NULL;
   }
 
   df = (struct DxfFile *)calloc(1, sizeof(struct DxfFile));
-  df->primitives = NULL;
-  df->resolved_path = (char *)calloc(strlen(path)+1, sizeof(char));
-  memcpy(df->resolved_path, path, strlen(path)+1);
+  df->entities = NULL;
+  df->resolved_path = (char *)calloc(strlen(resolved_path)+1, sizeof(char));
+  memcpy(df->resolved_path, resolved_path, strlen(resolved_path)+1);
+  free(resolved_path);
 
   cur = NULL;
   prm = NULL;
@@ -86,19 +87,20 @@ dxf_file_open(char *path)
     }
 
     if (in_entities && is_entity(stripped)) {
-      prm = fill_primitive(stripped, fp);
+      prm = entity_fill(stripped, fp);
       if (prm == NULL) {
         return NULL;
       }
 
-      if (df->primitives == NULL) {
-        df->primitives = prm;
+      if (df->entities == NULL) {
+        df->entities = prm;
         cur = prm;
 
       } else {
         cur->next = prm;
         cur = prm;
       }
+      df->entities_quant++;
     }
     free(stripped);
   }
@@ -121,15 +123,15 @@ dxf_file_close(struct DxfFile *df)
 {
   assert(df != NULL);
 
-  struct Primitive *tmp, *cur;
+  struct Entity *tmp, *cur;
 
   free(df->resolved_path);
 
-  cur = df->primitives;
+  cur = df->entities;
   while (cur != NULL) {
     tmp = cur;
     cur = cur->next;
-    destroy_primitive(tmp);
+    entity_destroy(tmp);
     free(tmp);
   }
 
@@ -207,33 +209,33 @@ is_entity(char *line)
   prm: Primitive struct to fill
   fp: opened file to parse
 */
-static struct Primitive *
-fill_primitive(char *line, FILE *fp)
+static struct Entity *
+entity_fill(char *line, FILE *fp)
 {
   assert(line != NULL);
   assert(fp != NULL);
 
-  struct Primitive *prm; 
+  struct Entity *ent; 
 
-  prm = (struct Primitive *)malloc(sizeof(struct Primitive));
-  if (prm == NULL) {
+  ent = (struct Entity *)calloc(1, sizeof(struct Entity));
+  if (ent == NULL) {
     return NULL;
   }
 
   if (strcmp(line, entity_line.string) == 0) {
-    prm->type = (char *)calloc(strlen(entity_line.string)+1, sizeof(char));
-    memcpy(prm->type, entity_line.string, strlen(entity_line.string)+1);
-    prm->data = (void *)get_line(fp);
-    return prm;
+    ent->type = (char *)calloc(strlen(entity_line.string)+1, sizeof(char));
+    memcpy(ent->type, entity_line.string, strlen(entity_line.string)+1);
+    ent->data = (void *)get_line(fp);
+    return ent;
 
   } else if (strcmp(line, entity_spline.string) == 0) {
-    prm->type = (char *)calloc(strlen(entity_spline.string)+1, sizeof(char));
-    memcpy(prm->type, entity_spline.string, strlen(entity_spline.string)+1);
-    prm->data = (void *)get_spline(fp);
-    return prm;
+    ent->type = (char *)calloc(strlen(entity_spline.string)+1, sizeof(char));
+    memcpy(ent->type, entity_spline.string, strlen(entity_spline.string)+1);
+    ent->data = (void *)get_spline(fp);
+    return ent;
 
   } else {
-    free(prm);
+    free(ent);
     return NULL;
   }
 }
@@ -246,15 +248,15 @@ fill_primitive(char *line, FILE *fp)
   Caller can't use pointer after this routine.
 */
 static int
-destroy_primitive(struct Primitive *prm)
+entity_destroy(struct Entity *ent)
 {
-  assert(prm != NULL);
+  assert(ent != NULL);
 
-  if (strcmp(prm->type, entity_line.string) == 0) {
+  if (strcmp(ent->type, entity_line.string) == 0) {
     /* Nothing to do here */
     return 1;
 
-  } else if (strcmp(prm->type, entity_spline.string) == 0) {
+  } else if (strcmp(ent->type, entity_spline.string) == 0) {
     
     return 1;
 
