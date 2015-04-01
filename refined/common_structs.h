@@ -16,31 +16,39 @@ struct Point {
   double y;
 };
 
-/* Primitive data structures */
+/* Entity data structures */
 
 struct LineData {
+  char *type;
   struct Point begin;
   struct Point end;
 };
 
 struct SplineData {
+  char *type;
   /* spline stuff */
 };
 
 struct LinearData {
+  char *type;
   struct Point *points;
   int point_quant;
+};
+
+union EntityData {
+  char *type;
+  struct LineData line;
+  struct SplineData spline;
 };
 
 /* ---------- */
 
 struct Header {
-  
+ /* header stuff */ 
 };
 
 struct Entity {
-  char *type;
-  void *data;
+  union EntityData *data;
   struct Entity *next;
 };
 
@@ -53,7 +61,7 @@ struct DxfFile {
 
 struct Linear {
   char *id;
-  struct Primitive *primitives;
+  struct Entity *entities;
   struct Point mass_center;
   struct Point min;
   struct Point max;

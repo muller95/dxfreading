@@ -16,8 +16,8 @@ static int is_entity(char *);
 static struct Entity * entity_fill(char *, FILE *);
 static int entity_destroy(struct Entity *ent);
 
-static struct LineData * get_line(FILE *);
-static struct SplineData * get_spline(FILE *);
+static union EntityData * ent_line_parse(FILE *);
+static union EntityData * ent_spline_parse(FILE *);
 
 struct entity_line_t entity_line = {"LINE", "AcDbLine", "10", "20", "11", "21"};
 struct entity_spline_t entity_spline = {"SPLINE", "AcDbSpline", "10", "20", "40", "72", "73"};
@@ -39,7 +39,7 @@ dxf_file_open(char *path)
   int in_entities;
   size_t line_length;
   ssize_t ch_read;
-  struct Entity *prm, *cur;
+  struct Entity *ent, *cur;
   struct DxfFile *df;
 
   resolved_path = canonicalize_file_name(path);
@@ -60,7 +60,7 @@ dxf_file_open(char *path)
   free(resolved_path);
 
   cur = NULL;
-  prm = NULL;
+  ent = NULL;
   line = NULL;
   line_length = 0;
   in_entities = 0;
@@ -87,18 +87,18 @@ dxf_file_open(char *path)
     }
 
     if (in_entities && is_entity(stripped)) {
-      prm = entity_fill(stripped, fp);
-      if (prm == NULL) {
+      ent = entity_fill(stripped, fp);
+      if (ent == NULL) {
         return NULL;
       }
 
       if (df->entities == NULL) {
-        df->entities = prm;
-        cur = prm;
+        df->entities = ent;
+        cur = ent;
 
       } else {
-        cur->next = prm;
-        cur = prm;
+        cur->next = ent;
+        cur = ent;
       }
       df->entities_quant++;
     }
@@ -204,9 +204,9 @@ is_entity(char *line)
 
 
 /*
-  fill_primitive: abstraction layer to parser funcs
+  entity_fill: abstraction layer to parser funcs
 
-  prm: Primitive struct to fill
+  line: current file line w/ entity type
   fp: opened file to parse
 */
 static struct Entity *
@@ -223,15 +223,11 @@ entity_fill(char *line, FILE *fp)
   }
 
   if (strcmp(line, entity_line.string) == 0) {
-    ent->type = (char *)calloc(strlen(entity_line.string)+1, sizeof(char));
-    memcpy(ent->type, entity_line.string, strlen(entity_line.string)+1);
-    ent->data = (void *)get_line(fp);
+    ent->data = ent_line_parse(fp);
     return ent;
 
   } else if (strcmp(line, entity_spline.string) == 0) {
-    ent->type = (char *)calloc(strlen(entity_spline.string)+1, sizeof(char));
-    memcpy(ent->type, entity_spline.string, strlen(entity_spline.string)+1);
-    ent->data = (void *)get_spline(fp);
+    ent->data = ent_spline_parse(fp);
     return ent;
 
   } else {
@@ -242,9 +238,9 @@ entity_fill(char *line, FILE *fp)
 
 
 /*
-  primitive_destroy: frees Primitive memory
+  entity_destroy: frees Entity memory
 
-  prm: Primitive struct to free
+  ent: Entity struct to free
   Caller can't use pointer after this routine.
 */
 static int
@@ -252,12 +248,16 @@ entity_destroy(struct Entity *ent)
 {
   assert(ent != NULL);
 
-  if (strcmp(ent->type, entity_line.string) == 0) {
-    /* Nothing to do here */
+  if (strcmp(ent->data->type, entity_line.string) == 0) {
+    free(ent->data->type);
+
+    free(ent->data);
     return 1;
 
-  } else if (strcmp(ent->type, entity_spline.string) == 0) {
-    
+  } else if (strcmp(ent->data->type, entity_spline.string) == 0) {
+    free(ent->data->type);
+
+    free(ent->data);
     return 1;
 
   } else {
@@ -270,20 +270,29 @@ entity_destroy(struct Entity *ent)
 
 
 /*
-  get_line: returns LINE entity data
+  ent_line_parse: returns LINE entity data
 */
-static struct LineData *
-get_line(FILE *fp)
+static union EntityData *
+ent_line_parse(FILE *fp)
 {
   assert(fp != NULL);
 
-  struct LineData *ld;
+  union EntityData *ed;
   char *line, *stripped;
   size_t line_length;
   ssize_t ch_read;
   int read_line;
 
-  ld = (struct LineData *)calloc(1, sizeof(struct LineData));
+  ed = (union EntityData *)calloc(1, sizeof(union EntityData));
+  if (ed == NULL) {
+    return NULL;
+  }
+
+  ed->line.type = strdup(entity_line.string);
+  if (ed->line.type == NULL) {
+    return NULL;
+  }
+
   line = NULL;
   line_length = 0;
 
@@ -291,14 +300,14 @@ get_line(FILE *fp)
   while ((ch_read = getline(&line, &line_length, fp)) != -1) {
     if (feof(fp) || ferror(fp)) {
       free(line);
-      free(ld);
+      free(ed);
       return NULL;
     }
 
     stripped = strip_str(line);
     if (stripped == NULL) {
       free(line);
-      free(ld);
+      free(ed);
       return NULL;
     }
 
@@ -321,12 +330,12 @@ get_line(FILE *fp)
       free(stripped);
       if ((ch_read = getline(&line, &line_length, fp)) != -1) {
       stripped = strip_str(line);
-      ld->begin.x = atof(stripped);
+      ed->line.begin.x = atof(stripped);
 
       } else {
         free(stripped);
         free(line);
-        free(ld);
+        free(ed);
         return NULL;
       }
 
@@ -334,12 +343,12 @@ get_line(FILE *fp)
       free(stripped);
       if ((ch_read = getline(&line, &line_length, fp)) != -1) {
       stripped = strip_str(line);
-      ld->begin.y = atof(stripped);
+      ed->line.begin.y = atof(stripped);
 
       } else {
         free(stripped);
         free(line);
-        free(ld);
+        free(ed);
         return NULL;
       }
 
@@ -347,12 +356,12 @@ get_line(FILE *fp)
       free(stripped);
       if ((ch_read = getline(&line, &line_length, fp)) != -1) {
       stripped = strip_str(line);
-      ld->end.x = atof(stripped);
+      ed->line.end.x = atof(stripped);
 
       } else {
         free(stripped);
         free(line);
-        free(ld);
+        free(ed);
         return NULL;
       }
 
@@ -360,12 +369,12 @@ get_line(FILE *fp)
       free(stripped);
       if ((ch_read = getline(&line, &line_length, fp)) != -1) {
       stripped = strip_str(line);
-      ld->end.y = atof(stripped);
+      ed->line.end.y = atof(stripped);
 
       } else {
         free(stripped);
         free(line);
-        free(ld);
+        free(ed);
         return NULL;
       }
     }
@@ -373,14 +382,14 @@ get_line(FILE *fp)
   }
   free(line);
 
-  return ld;
+  return ed;
 }
 
 /*
-  get_spline: returns SPLINE entity data
+  ent_spline_parse: returns SPLINE entity data
 */
-static struct SplineData *
-get_spline(FILE *fp)
+static union EntityData *
+ent_spline_parse(FILE *fp)
 {
   return NULL;
 }
