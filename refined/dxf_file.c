@@ -11,6 +11,8 @@
 
 #include "dxf_file.h"
 
+static struct FileLine * file_lines_get(FILE *)
+
 static char * strip_str(char *);
 static int is_entity(char *);
 static struct Entity * entity_fill(char *, FILE *);
@@ -35,10 +37,11 @@ dxf_file_open(char *path)
   assert(path != NULL);
 
   FILE *fp;
-  char *line, *stripped, *resolved_path;
+  char *resolved_path;
   int in_entities;
   size_t line_length;
   ssize_t ch_read;
+  struct FileLine *lines;
   struct Entity *ent, *cur;
   struct DxfFile *df;
 
@@ -61,22 +64,13 @@ dxf_file_open(char *path)
 
   cur = NULL;
   ent = NULL;
-  line = NULL;
-  line_length = 0;
   in_entities = 0;
 
-  while ((ch_read = getline(&line, &line_length, fp)) != -1) {
-    if (ferror(fp)) {
-      free(line);
-      dxf_file_close(df);
-      return NULL;
-    }
+  /* Work In Progress */
 
-    stripped = strip_str(line);
-    if (stripped == NULL) {
-      return NULL;
-    }
+  lines = file_lines_get(fp);
 
+#if 0
     if (strcmp(stripped, ENTITIES) == 0) {
       in_entities = 1;
       continue;
@@ -110,6 +104,8 @@ dxf_file_open(char *path)
   fclose(fp);
 
   return df;
+#endif
+
 }
 
 /*
@@ -141,6 +137,78 @@ dxf_file_close(struct DxfFile *df)
 
 
 /* ----- static funcs ----- */
+
+/*
+  file_lines_get: return list of lines in file
+
+  fp: pointer to open file
+*/
+static struct FileLine *
+file_lines_get(FILE *fp)
+{
+  assert(fp != NULL);
+
+  char *line, *stripped;
+  size_t line_length;
+  ssize_t ch_read;
+  struct FileLine *base, *cur;
+
+  base = NULL;
+  cur = NULL;
+
+  while ((ch_read = getline(&line, &line_length, fp)) != -1) {
+    if (ferror(fp)) {
+      free(line);
+      file_lines_destroy(base);
+      return NULL;
+    }
+
+    stripped = strip_str(line);
+    if (stripped == NULL) {
+      free(line);
+      file_lines_destroy(base);
+      return NULL;
+    }
+
+    if (base == NULL) {
+      base = (struct FileLine *)calloc(1, sizeof(struct FileLine));
+      cur = base;
+    } else { 
+      cur = (struct FileLine *)calloc(1, sizeof(struct FileLine));
+
+    cur->line = strdup(stripped);
+    cur = cur->next;
+
+    free(line);
+    free(stripped);
+  }
+
+  return base;
+}
+
+
+/*
+  file_lines_destroy: frees a memory of file lines list
+
+  lines: pointer to list base
+  Caller can't access pointer after this routine.
+*/
+void
+file_lines_destroy(struct FileLine *lines)
+{
+  assert(lines != NULL);
+
+  struct FileLine *tmp, *cur;
+
+  cur = lines;
+  while (cur != NULL) {
+    tmp = cur;
+    cur = cur->next;
+    free(tmp);
+  }
+
+  lines = NULL;
+}
 
 
 /*

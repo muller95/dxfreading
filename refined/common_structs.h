@@ -16,6 +16,11 @@ struct Point {
   double y;
 };
 
+struct FileLine {
+  char *line;
+  struct FileLine *next;
+};
+
 /* Entity data structures */
 
 struct LineData {
