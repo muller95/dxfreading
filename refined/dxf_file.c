@@ -20,7 +20,7 @@ static union EntityData * ent_line_parse(FILE *);
 static union EntityData * ent_spline_parse(FILE *);
 
 struct entity_line_t entity_line = {"LINE", "AcDbLine", "10", "20", "11", "21"};
-struct entity_spline_t entity_spline = {"SPLINE", "AcDbSpline", "10", "20", "40", "72", "73"};
+struct entity_spline_t entity_spline = {"SPLINE", "AcDbSpline", "10", "20", "73"};
 
 
 /*
@@ -42,7 +42,7 @@ dxf_file_open(char *path)
   struct Entity *ent, *cur;
   struct DxfFile *df;
 
-  resolved_path = canonicalize_file_name(path);
+  resolved_path = realpath(path, NULL);
 
   if (resolved_path == NULL) {
     resolved_path = (char *)calloc(strlen(path)+1, sizeof(char));
@@ -257,6 +257,8 @@ entity_destroy(struct Entity *ent)
   } else if (strcmp(ent->data->type, entity_spline.string) == 0) {
     free(ent->data->type);
 
+    free(ent->data->spline.points);
+    
     free(ent->data);
     return 1;
 
@@ -329,8 +331,8 @@ ent_line_parse(FILE *fp)
     } else if (read_line && strcmp(stripped, entity_line.x_begin) == 0) {
       free(stripped);
       if ((ch_read = getline(&line, &line_length, fp)) != -1) {
-      stripped = strip_str(line);
-      ed->line.begin.x = atof(stripped);
+        stripped = strip_str(line);
+        ed->line.begin.x = atof(stripped);
 
       } else {
         free(stripped);
@@ -342,8 +344,8 @@ ent_line_parse(FILE *fp)
     } else if (read_line && strcmp(stripped, entity_line.y_begin) == 0) {
       free(stripped);
       if ((ch_read = getline(&line, &line_length, fp)) != -1) {
-      stripped = strip_str(line);
-      ed->line.begin.y = atof(stripped);
+        stripped = strip_str(line);
+        ed->line.begin.y = atof(stripped);
 
       } else {
         free(stripped);
@@ -355,8 +357,8 @@ ent_line_parse(FILE *fp)
     } else if (read_line && strcmp(stripped, entity_line.x_end) == 0) {
       free(stripped);
       if ((ch_read = getline(&line, &line_length, fp)) != -1) {
-      stripped = strip_str(line);
-      ed->line.end.x = atof(stripped);
+        stripped = strip_str(line);
+        ed->line.end.x = atof(stripped);
 
       } else {
         free(stripped);
@@ -368,8 +370,8 @@ ent_line_parse(FILE *fp)
     } else if (read_line && strcmp(stripped, entity_line.y_end) == 0) {
       free(stripped);
       if ((ch_read = getline(&line, &line_length, fp)) != -1) {
-      stripped = strip_str(line);
-      ed->line.end.y = atof(stripped);
+        stripped = strip_str(line);
+        ed->line.end.y = atof(stripped);
 
       } else {
         free(stripped);
@@ -391,5 +393,112 @@ ent_line_parse(FILE *fp)
 static union EntityData *
 ent_spline_parse(FILE *fp)
 {
-  return NULL;
+  assert(fp != NULL);
+
+  union EntityData *ed;
+  char *line, *stripped;
+  size_t line_length;
+  ssize_t ch_read;
+  int read_line;
+  struct Point *cur;
+
+  cur = NULL;
+
+  ed = (union EntityData *)calloc(1, sizeof(union EntityData));
+  if (ed == NULL) {
+    return NULL;
+  }
+
+  ed->spline.type = strdup(entity_spline.string);
+  if (ed->spline.type == NULL) {
+    return NULL;
+  }
+
+  line = NULL;
+  line_length = 0;
+
+  read_line = 1;
+  while ((ch_read = getline(&line, &line_length, fp)) != -1) {
+    if (feof(fp) || ferror(fp)) {
+      free(line);
+      free(ed);
+      return NULL;
+    }
+
+    stripped = strip_str(line);
+    if (stripped == NULL) {
+      free(line);
+      free(ed);
+      return NULL;
+    }
+
+    if (read_line && strcmp(stripped, NEW_ENTITY) == 0) {
+      break;
+
+    } else if (strcmp(stripped, HANDLE) == 0) {
+      read_line = 0;
+
+    } else if (strcmp(stripped, ENTITY_DATA) == 0) {
+      read_line = 0;
+
+    } else if (strcmp(stripped, DIVIDER) == 0) {
+      read_line = 1;
+
+    } else if (strcmp(stripped, entity_spline.dbsect) == 0) {
+      read_line = 1;
+
+    } else if (read_line && strcmp(stripped, entity_spline.cp_x) == 0) {
+      free(stripped);
+      if ((ch_read = getline(&line, &line_length, fp)) != -1) {
+        stripped = strip_str(line);
+
+        cur->x = atof(stripped);
+
+      } else {
+        free(stripped);
+        free(line);
+        free(ed);
+        return NULL;
+      }
+
+    } else if (read_line && strcmp(stripped, entity_spline.cp_y) == 0) {
+      free(stripped);
+      if ((ch_read = getline(&line, &line_length, fp)) != -1) {
+        stripped = strip_str(line);
+
+        cur->y = atof(stripped);
+
+        cur++;
+
+      } else {
+        free(stripped);
+        free(line);
+        free(ed);
+        return NULL;
+      }
+
+    } else if (read_line && strcmp(stripped, entity_spline.cps_quant) == 0) {
+      free(stripped);
+      if ((ch_read = getline(&line, &line_length, fp)) != -1) {
+        stripped = strip_str(line);
+        ed->spline.cps_quant = atoi(stripped);
+        ed->spline.points = (struct Point *)calloc(ed->spline.cps_quant, sizeof(struct Point));
+        cur = ed->spline.points;
+
+      } else {
+        free(stripped);
+        free(line);
+        free(ed);
+        return NULL;
+      }
+  } else if (read_line && strcmp(stripped, "74") == 0) { 
+    if ((ch_read = getline(&line, &line_length, fp)) != -1) {
+      ;
+    }
+  }
+    free(stripped);
+  }
+  free(line);
+
+  return ed;
 }

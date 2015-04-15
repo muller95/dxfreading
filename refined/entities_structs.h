@@ -22,8 +22,6 @@ struct entity_spline_t {
   char *dbsect;
   char *cp_x;  /* cp == control point */
   char *cp_y;
-  char *knot;
-  char *knots_quant;
   char *cps_quant; 
 };
 extern struct entity_spline_t entity_spline;

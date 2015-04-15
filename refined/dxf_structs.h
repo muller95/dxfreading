@@ -26,7 +26,8 @@ struct LineData {
 
 struct SplineData {
   char *type;
-  /* spline stuff */
+  int cps_quant;
+  struct Point *points; 
 };
 
 struct LinearData {
