@@ -3,6 +3,7 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <errno.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,20 +12,14 @@
 
 #include "dxf_file.h"
 
-static struct FileLine * file_lines_get(FILE *)
+#define ARR_SIZE 128
 
-static char * strip_str(char *);
-static int is_entity(char *);
-static struct Entity * entity_fill(char *, FILE *);
-static int entity_destroy(struct Entity *ent);
+static char ** file_lines_get(FILE *fp, size_t *lines_quant);
+static void file_lines_destroy(char **lines, size_t line_quant);
 
-static union EntityData * ent_line_parse(FILE *);
-static union EntityData * ent_spline_parse(FILE *);
+static char * strip_str(char *str);
 
-struct entity_line_t entity_line = {"LINE", "AcDbLine", "10", "20", "11", "21"};
-struct entity_spline_t entity_spline = {"SPLINE", "AcDbSpline", "10", "20", "40", "72", "73"};
-
-
+static union Entity * entities_read(char **lines, size_t line_quant);
 /*
   dxf_file_open: creates a DxfFile structure
 
@@ -32,81 +27,65 @@ struct entity_spline_t entity_spline = {"SPLINE", "AcDbSpline", "10", "20", "40"
   Note, if we open a link, we will save path _in_ link, not path _of_ link.
 */
 struct DxfFile *
-dxf_file_open(char *path)
+dxf_file_open(const char *path)
 {
   assert(path != NULL);
 
   FILE *fp;
-  char *resolved_path;
-  int in_entities;
-  size_t line_length;
-  ssize_t ch_read;
-  struct FileLine *lines;
-  struct Entity *ent, *cur;
+  char *resolved_path, **lines;
+  size_t lines_quant;
   struct DxfFile *df;
 
-  resolved_path = canonicalize_file_name(path);
+  resolved_path = realpath(path, NULL);
 
   if (resolved_path == NULL) {
-    resolved_path = (char *)calloc(strlen(path)+1, sizeof(char));
-    memcpy(resolved_path, path, strlen(path)+1);
+    resolved_path = strdup(path);
+    if (resolved_path == NULL) {
+      fprintf(stderr, "%s: can't strdup(): %s\n", __func__, strerror(errno));
+      return NULL;
+    }
   }
 
   if ((fp = fopen(resolved_path, "r")) == NULL) {
+    fprintf(stderr, "%s: can't open %s: %s\n", __func__, resolved_path, strerror(errno));
     return NULL;
   }
 
   df = (struct DxfFile *)calloc(1, sizeof(struct DxfFile));
-  df->entities = NULL;
-  df->resolved_path = (char *)calloc(strlen(resolved_path)+1, sizeof(char));
-  memcpy(df->resolved_path, resolved_path, strlen(resolved_path)+1);
+  df->resolved_path = strdup(resolved_path);
+  
   free(resolved_path);
 
-  cur = NULL;
-  ent = NULL;
-  in_entities = 0;
+  df->header = NULL;
+  df->classes = NULL;
+  df->tables = NULL;
+  df->blocks = NULL;
+  df->entities = NULL;
+  df->objects = NULL;
+  df->thumbnail = NULL;
 
-  /* Work In Progress */
+  lines = file_lines_get(fp, &lines_quant);
 
-  lines = file_lines_get(fp);
+/* df->header = header_read(lines, lines_quant); */
+/* df->classes = classes_read(lines, lines_quant); */
+/* df->tables = tables_read(lines, lines_quant); */
+/* df->blocks = blocks_read(lines, lines_quant); */
+  df->entities = entities_read(lines, lines_quant);
+/* df->objects = objects_read(lines, lines_quant); */
+/* df->thumbnail = thumbnail_read(lines, lines_quant); */
 
-#if 0
-    if (strcmp(stripped, ENTITIES) == 0) {
-      in_entities = 1;
-      continue;
+/*  if (df->entities == NULL) {
+    fprintf(stderr, "%s: entities_read() failure\n", __func__);
+    file_lines_destroy(lines, lines_quant);
+    return NULL
+  } */
 
-    } else if (strcmp(stripped, ENDSEC) == 0 && in_entities == 1) {
-      in_entities = 0;
-      break;
-    }
-
-    if (in_entities && is_entity(stripped)) {
-      ent = entity_fill(stripped, fp);
-      if (ent == NULL) {
-        return NULL;
-      }
-
-      if (df->entities == NULL) {
-        df->entities = ent;
-        cur = ent;
-
-      } else {
-        cur->next = ent;
-        cur = ent;
-      }
-      df->entities_quant++;
-    }
-    free(stripped);
-  }
-
-
-  free(line);
+  file_lines_destroy(lines, lines_quant);
   fclose(fp);
 
   return df;
-#endif
-
 }
+
 
 /*
   dxf_file_close: frees the memory of DxfFile
@@ -119,16 +98,34 @@ dxf_file_close(struct DxfFile *df)
 {
   assert(df != NULL);
 
-  struct Entity *tmp, *cur;
-
   free(df->resolved_path);
 
-  cur = df->entities;
-  while (cur != NULL) {
-    tmp = cur;
-    cur = cur->next;
-    entity_destroy(tmp);
-    free(tmp);
+  if (df->header != NULL) {
+    free(df->header);
+  }
+
+  if (df->classes != NULL) {
+    free(df->classes);
+  }
+
+  if (df->tables != NULL) {
+    free(df->tables);
+  }
+
+  if (df->blocks != NULL) {
+    free(df->blocks);
+  }
+
+  if (df->entities != NULL) {
+    free(df->entities);
+  }
+
+  if (df->objects != NULL) {
+    free(df->objects);
+  }
+
+  if (df->thumbnail != NULL) {
+    free(df->thumbnail);
   }
 
   free(df);
@@ -138,75 +135,91 @@ dxf_file_close(struct DxfFile *df)
 
 /* ----- static funcs ----- */
 
+
 /*
-  file_lines_get: return list of lines in file
+  file_lines_get: return array of file lines
 
   fp: pointer to open file
+  lines_quant: pointer to write lines quantity
 */
-static struct FileLine *
-file_lines_get(FILE *fp)
+static char **
+file_lines_get(FILE *fp, size_t *lines_quant)
 {
   assert(fp != NULL);
+  assert(lines_quant != NULL);
 
-  char *line, *stripped;
-  size_t line_length;
+  char *line, *stripped, **lines;
+  size_t line_length, arr_size, lq;
   ssize_t ch_read;
-  struct FileLine *base, *cur;
 
-  base = NULL;
-  cur = NULL;
+  line = NULL;
+  line_length = 0;
+
+  arr_size = (size_t)ARR_SIZE;
+  lines = (char **)calloc(arr_size, sizeof(char *));
 
   while ((ch_read = getline(&line, &line_length, fp)) != -1) {
     if (ferror(fp)) {
+      fprintf(stderr, "%s: file error: %s\n", __func__, strerror(errno));
       free(line);
-      file_lines_destroy(base);
+      file_lines_destroy(lines, lq);
       return NULL;
     }
 
     stripped = strip_str(line);
     if (stripped == NULL) {
+      fprintf(stderr, "%s: strip_str() failure\n", __func__);
       free(line);
-      file_lines_destroy(base);
+      file_lines_destroy(lines, lq);
       return NULL;
     }
 
-    if (base == NULL) {
-      base = (struct FileLine *)calloc(1, sizeof(struct FileLine));
-      cur = base;
-    } else { 
-      cur = (struct FileLine *)calloc(1, sizeof(struct FileLine));
+    if (lq >= arr_size) {
+      arr_size *= 2;
+      lines = (char **)realloc(lines, arr_size * sizeof(char *));
+      if (lines == NULL) {
+        fprintf(stderr, "%s: realloc() failure: %s\n", __func__, strerror(errno));
+        free(line);
+        free(stripped);
+        return NULL;
+      }
+    }
 
-    cur->line = strdup(stripped);
-    cur = cur->next;
+    lines[lq] = strdup(stripped);
 
     free(line);
     free(stripped);
+    line = NULL;
+    lq++;
   }
 
-  return base;
+  lines = (char **)realloc(lines, lq * sizeof(char *));
+  *lines_quant = lq;
+
+  return lines;
 }
 
 
 /*
   file_lines_destroy: frees a memory of file lines list
 
-  lines: pointer to list base
+  lines: pointer to lines array
+  quant: quantity of lines in array
   Caller can't access pointer after this routine.
 */
-void
-file_lines_destroy(struct FileLine *lines)
+static void
+file_lines_destroy(char *lines[], size_t lines_quant)
 {
   assert(lines != NULL);
+  assert(lines_quant >= 0);
 
-  struct FileLine *tmp, *cur;
+  size_t i;
 
-  cur = lines;
-  while (cur != NULL) {
-    tmp = cur;
-    cur = cur->next;
-    free(tmp);
+  for (i=0; i < lines_quant; i++) {
+    free(lines[i]);
   }
 
+  free(lines);
   lines = NULL;
 }
 
@@ -250,214 +263,13 @@ strip_str(char *str)
   return stripped;
 }
 
-
-/*
-  is_entity: compares the line w/ known entity's strings
-
-  line: string to compare
-*/
-static int 
-is_entity(char *line)
+static union Entity * 
+entities_read(char **lines, size_t lines_quant)
 {
-  if (strcmp(line, entity_line.string) == 0) {
-    return 1;
-
-  } else if (strcmp(line, entity_spline.string) == 0) {
-    return 1;
-
-  } else {
-    return 0;
-  }
-}
-
-
-/*
-  entity_fill: abstraction layer to parser funcs
-
-  line: current file line w/ entity type
-  fp: opened file to parse
-*/
-static struct Entity *
-entity_fill(char *line, FILE *fp)
-{
-  assert(line != NULL);
-  assert(fp != NULL);
-
-  struct Entity *ent; 
-
-  ent = (struct Entity *)calloc(1, sizeof(struct Entity));
-  if (ent == NULL) {
-    return NULL;
-  }
-
-  if (strcmp(line, entity_line.string) == 0) {
-    ent->data = ent_line_parse(fp);
-    return ent;
-
-  } else if (strcmp(line, entity_spline.string) == 0) {
-    ent->data = ent_spline_parse(fp);
-    return ent;
-
-  } else {
-    free(ent);
-    return NULL;
-  }
-}
-
-
-/*
-  entity_destroy: frees Entity memory
-
-  ent: Entity struct to free
-  Caller can't use pointer after this routine.
-*/
-static int
-entity_destroy(struct Entity *ent)
-{
-  assert(ent != NULL);
-
-  if (strcmp(ent->data->type, entity_line.string) == 0) {
-    free(ent->data->type);
-
-    free(ent->data);
-    return 1;
-
-  } else if (strcmp(ent->data->type, entity_spline.string) == 0) {
-    free(ent->data->type);
-
-    free(ent->data);
-    return 1;
-
-  } else {
-    return 0;
-  }
+  return NULL;
 }
 
 
 /* ----- entities parsing funcs ----- */
 
 
-/*
-  ent_line_parse: returns LINE entity data
-*/
-static union EntityData *
-ent_line_parse(FILE *fp)
-{
-  assert(fp != NULL);
-
-  union EntityData *ed;
-  char *line, *stripped;
-  size_t line_length;
-  ssize_t ch_read;
-  int read_line;
-
-  ed = (union EntityData *)calloc(1, sizeof(union EntityData));
-  if (ed == NULL) {
-    return NULL;
-  }
-
-  ed->line.type = strdup(entity_line.string);
-  if (ed->line.type == NULL) {
-    return NULL;
-  }
-
-  line = NULL;
-  line_length = 0;
-
-  read_line = 1;
-  while ((ch_read = getline(&line, &line_length, fp)) != -1) {
-    if (feof(fp) || ferror(fp)) {
-      free(line);
-      free(ed);
-      return NULL;
-    }
-
-    stripped = strip_str(line);
-    if (stripped == NULL) {
-      free(line);
-      free(ed);
-      return NULL;
-    }
-
-    if (read_line && strcmp(stripped, NEW_ENTITY) == 0) {
-      break;
-
-    } else if (strcmp(stripped, HANDLE) == 0) {
-      read_line = 0;
-
-    } else if (strcmp(stripped, ENTITY_DATA) == 0) {
-      read_line = 0;
-
-    } else if (strcmp(stripped, DIVIDER) == 0) {
-      read_line = 1;
-
-    } else if (strcmp(stripped, entity_line.dbsect) == 0) {
-      read_line = 1;
-
-    } else if (read_line && strcmp(stripped, entity_line.x_begin) == 0) {
-      free(stripped);
-      if ((ch_read = getline(&line, &line_length, fp)) != -1) {
-      stripped = strip_str(line);
-      ed->line.begin.x = atof(stripped);
-
-      } else {
-        free(stripped);
-        free(line);
-        free(ed);
-        return NULL;
-      }
-
-    } else if (read_line && strcmp(stripped, entity_line.y_begin) == 0) {
-      free(stripped);
-      if ((ch_read = getline(&line, &line_length, fp)) != -1) {
-      stripped = strip_str(line);
-      ed->line.begin.y = atof(stripped);
-
-      } else {
-        free(stripped);
-        free(line);
-        free(ed);
-        return NULL;
-      }
-
-    } else if (read_line && strcmp(stripped, entity_line.x_end) == 0) {
-      free(stripped);
-      if ((ch_read = getline(&line, &line_length, fp)) != -1) {
-      stripped = strip_str(line);
-      ed->line.end.x = atof(stripped);
-
-      } else {
-        free(stripped);
-        free(line);
-        free(ed);
-        return NULL;
-      }
-
-    } else if (read_line && strcmp(stripped, entity_line.y_end) == 0) {
-      free(stripped);
-      if ((ch_read = getline(&line, &line_length, fp)) != -1) {
-      stripped = strip_str(line);
-      ed->line.end.y = atof(stripped);
-
-      } else {
-        free(stripped);
-        free(line);
-        free(ed);
-        return NULL;
-      }
-    }
-    free(stripped);
-  }
-  free(line);
-
-  return ed;
-}
-
-/*
-  ent_spline_parse: returns SPLINE entity data
-*/
-static union EntityData *
-ent_spline_parse(FILE *fp)
-{
-  return NULL;
-}

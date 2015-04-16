@@ -4,9 +4,6 @@
 #ifndef _ENTITIES_STRUCTS_H_
 #define _ENTITIES_STRUCTS_H_
 
-#define ENTITIES "ENTITIES"
-#define ENDSEC "ENDSEC"
-
 struct entity_line_t {
   char *string;
   char *dbsect;
@@ -20,11 +17,9 @@ extern struct entity_line_t entity_line;
 struct entity_spline_t {
   char *string;
   char *dbsect;
+  char *cps_quant; 
   char *cp_x;  /* cp == control point */
   char *cp_y;
-  char *knot;
-  char *knots_quant;
-  char *cps_quant; 
 };
 extern struct entity_spline_t entity_spline;
 
