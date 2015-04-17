@@ -6,11 +6,19 @@
 
 #include "entities_structs.h"
 
-#define ENTITY_DATA "AcDbEntity"
-
 struct Point {
   double x;
   double y;
+};
+
+struct Sections {
+  char **header;
+  char **classes;
+  char **tables;
+  char **blocks;
+  char **entities;
+  char **objects;
+  char **thumbnail;
 };
 
 /* Entity data structures */
@@ -68,7 +76,7 @@ struct DxfFile {
   union Entity *entities;
   struct Object *objects;
   struct Thumbnail *thumbnail;
-  int entities_quant;
+  size_t entities_quant;
 };
 
 struct Linear {

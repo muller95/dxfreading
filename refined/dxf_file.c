@@ -15,11 +15,12 @@
 #define ARR_SIZE 128
 
 static char ** file_lines_get(FILE *fp, size_t *lines_quant);
+static void get_sections(char **lines, size_t lines_quant, struct Sections *sections);
 static void file_lines_destroy(char **lines, size_t line_quant);
 
 static char * strip_str(char *str);
 
-static union Entity * entities_read(char **lines, size_t line_quant);
+static union Entity * entities_read(char **base, size_t *entities_quant);
 /*
   dxf_file_open: creates a DxfFile structure
 
@@ -34,6 +35,7 @@ dxf_file_open(const char *path)
   FILE *fp;
   char *resolved_path, **lines;
   size_t lines_quant;
+  struct Sections sections;
   struct DxfFile *df;
 
   resolved_path = realpath(path, NULL);
@@ -65,14 +67,16 @@ dxf_file_open(const char *path)
   df->thumbnail = NULL;
 
   lines = file_lines_get(fp, &lines_quant);
+  
+  get_sections(lines, lines_quant, &sections);
 
-/* df->header = header_read(lines, lines_quant); */
-/* df->classes = classes_read(lines, lines_quant); */
-/* df->tables = tables_read(lines, lines_quant); */
-/* df->blocks = blocks_read(lines, lines_quant); */
-  df->entities = entities_read(lines, lines_quant);
-/* df->objects = objects_read(lines, lines_quant); */
-/* df->thumbnail = thumbnail_read(lines, lines_quant); */
+/* df->header = header_read(lines, sections.header); */
+/* df->classes = classes_read(lines, sections.classes); */
+/* df->tables = tables_read(sections.tables); */
+/* df->blocks = blocks_read(sections.blocks); */
+  df->entities = entities_read(sections.entities, &(df->entities_quant));
+/* df->objects = objects_read(sections.objects); */
+/* df->thumbnail = thumbnail_read(sections.thumbnail); */
 
 /*  if (df->entities == NULL) {
     fprintf(stderr, "%s: entities_read() failure\n", __func__);
@@ -263,10 +267,116 @@ strip_str(char *str)
   return stripped;
 }
 
-static union Entity * 
-entities_read(char **lines, size_t lines_quant)
+
+static void
+get_sections(char **lines, size_t lines_quant, struct Sections *sections)
 {
-  return NULL;
+  char *line;
+  size_t i;
+
+  sections->header = NULL;
+  sections->classes = NULL;
+  sections->tables = NULL;
+  sections->blocks = NULL;
+  sections->entities = NULL;
+  sections->objects = NULL;
+  sections->thumbnail = NULL;
+
+  for (i=0; i < lines_quant; i++) {
+    line = lines[i];
+
+    if (strcmp(line, "SECTION") == 0) {
+
+      if (strcmp(lines[i+2], "HEADER") == 0) {
+        sections->header = &lines[i+2];
+
+      } else if (strcmp(lines[i+2], "CLASSES") == 0) {
+        sections->classes = &lines[i+2];
+
+      } else if (strcmp(lines[i+2], "TABLES") == 0) {
+        sections->tables = &lines[i+2];
+
+      } else if (strcmp(lines[i+2], "BLOCKS") == 0) {
+        sections->blocks = &lines[i+2];
+
+      } else if (strcmp(lines[i+2], "ENTITIES") == 0) {
+        sections->entities = &lines[i+2];
+
+      } else if (strcmp(lines[i+2], "OBJECTS") == 0) {
+        sections->objects = &lines[i+2];
+
+      } else if (strcmp(lines[i+2], "THUMBNAIL") == 0) {
+        sections->thumbnail = &lines[i+2];
+
+      } else {
+        /* unknown type */
+      }
+    }
+  }
+}
+
+
+static union Entity * 
+entities_read(char **base, size_t *entities_quant)
+{
+  char **cur;
+  size_t eq, arr_size;
+  union Entity *entities, *ent;
+
+  arr_size = ARR_SIZE;
+  entities = (union Entity *)calloc(arr_size, sizeof(union Entity));
+
+  eq = 0;
+  cur = base;
+  while (strcmp(*cur, "ENDSEC") != 0) {
+
+    if (eq >= arr_size) {
+      arr_size *= 2;
+      entities = (union Entity *)realloc(entities, arr_size * sizeof(union Entity));
+    }
+
+    if (strcmp(*cur, entity_line.string) == 0) {
+
+      ent = (union Entity *)calloc(1, sizeof(union Entity));
+
+      ent->type = strdup(entity_line.string);
+
+      while (strcmp(*cur, entity_line.dbsect) != 0) cur++;
+
+      while (strcmp(*cur, OBJ_TYPE) != 0) {
+        if (strcmp(*cur, entity_line.x_begin) == 0) {
+          ent->line.begin.x = atof(*(cur+1));
+
+        } else if (strcmp(*cur, entity_line.y_begin) == 0) {
+          ent->line.begin.y = atof(*(cur+1)); 
+
+        } else if (strcmp(*cur, entity_line.x_end) == 0) {
+          ent->line.end.x = atof(*(cur+1));
+
+        } else if (strcmp(*cur, entity_line.y_end) == 0) {
+          ent->line.end.y = atof(*(cur+1)); 
+        }
+
+        cur++;
+      }
+
+      memcpy(entities+eq, ent, sizeof(union Entity));
+      free(ent);
+
+      eq++;
+
+    } else if (strcmp(*cur, entity_spline.string) == 0) {
+      /* spline processing */
+      cur++;
+    } else {
+      cur++;
+    }
+  }
+
+  entities = (union Entity *)realloc(entities, eq * sizeof(union Entity));
+  *entities_quant = eq;
+
+  return entities;
 }
 
 
