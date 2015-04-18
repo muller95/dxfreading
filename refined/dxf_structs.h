@@ -31,7 +31,8 @@ struct LineData {
 
 struct SplineData {
   char *type;
-  /* spline stuff */
+  struct Point *points; 
+  int cps_quant;
 };
 
 

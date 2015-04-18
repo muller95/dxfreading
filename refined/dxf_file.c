@@ -21,6 +21,10 @@ static void file_lines_destroy(char **lines, size_t line_quant);
 static char * strip_str(char *str);
 
 static union Entity * entities_read(char **base, size_t *entities_quant);
+static union Entity * line_read(char **cur, size_t *offset);
+static union Entity * spline_read(char **cur, size_t *offset);
+
+
 /*
   dxf_file_open: creates a DxfFile structure
 
@@ -320,7 +324,7 @@ static union Entity *
 entities_read(char **base, size_t *entities_quant)
 {
   char **cur;
-  size_t eq, arr_size;
+  size_t eq, arr_size, offset;
   union Entity *entities, *ent;
 
   arr_size = ARR_SIZE;
@@ -336,38 +340,21 @@ entities_read(char **base, size_t *entities_quant)
     }
 
     if (strcmp(*cur, entity_line.string) == 0) {
-
-      ent = (union Entity *)calloc(1, sizeof(union Entity));
-
-      ent->type = strdup(entity_line.string);
-
-      while (strcmp(*cur, entity_line.dbsect) != 0) cur++;
-
-      while (strcmp(*cur, OBJ_TYPE) != 0) {
-        if (strcmp(*cur, entity_line.x_begin) == 0) {
-          ent->line.begin.x = atof(*(cur+1));
-
-        } else if (strcmp(*cur, entity_line.y_begin) == 0) {
-          ent->line.begin.y = atof(*(cur+1)); 
-
-        } else if (strcmp(*cur, entity_line.x_end) == 0) {
-          ent->line.end.x = atof(*(cur+1));
-
-        } else if (strcmp(*cur, entity_line.y_end) == 0) {
-          ent->line.end.y = atof(*(cur+1)); 
-        }
-
-        cur++;
-      }
-
+      ent = line_read(cur, &offset);
       memcpy(entities+eq, ent, sizeof(union Entity));
       free(ent);
 
+      cur += offset;
       eq++;
 
     } else if (strcmp(*cur, entity_spline.string) == 0) {
-      /* spline processing */
-      cur++;
+      ent = spline_read(cur, &offset);
+      memcpy(entities+eq, ent, sizeof(union Entity));
+      free(ent);
+
+      cur += offset;
+      eq++;
+
     } else {
       cur++;
     }
@@ -383,3 +370,103 @@ entities_read(char **base, size_t *entities_quant)
 /* ----- entities parsing funcs ----- */
 
 
+static union Entity *
+line_read(char **cur, size_t *offset) 
+{
+  union Entity *ent;
+  size_t ofs;
+
+  ent = (union Entity *)calloc(1, sizeof(union Entity));
+
+  ent->type = strdup(entity_line.string);
+
+  ofs = 0;
+  while (strcmp(*cur, entity_line.dbsect) != 0) {  /* We don't need some data yet */
+    cur++;
+    ofs++;
+  }
+
+  while (strcmp(*cur, OBJ_TYPE) != 0) {
+    if (strcmp(*cur, entity_line.x_begin) == 0) {
+      ent->line.begin.x = atof(*(++cur));
+      ofs++;
+
+    } else if (strcmp(*cur, entity_line.y_begin) == 0) {
+      ent->line.begin.y = atof(*(++cur)); 
+      ofs++;
+
+    } else if (strcmp(*cur, entity_line.x_end) == 0) {
+      ent->line.end.x = atof(*(++cur));
+      ofs++;
+
+    } else if (strcmp(*cur, entity_line.y_end) == 0) {
+      ent->line.end.y = atof(*(++cur)); 
+      ofs++;
+    }
+    cur++;
+    ofs++;
+  }
+
+  *offset = ofs;
+  return ent;
+}
+
+
+static union Entity *
+spline_read(char **cur, size_t *offset) 
+{
+  union Entity *ent;
+  struct Point *point;
+  size_t ofs;
+
+  ent = (union Entity *)calloc(1, sizeof(union Entity));
+
+  ent->type = strdup(entity_spline.string);
+
+  ent->spline.points = NULL;
+  ofs = 0;
+  while (strcmp(*cur, entity_spline.dbsect) != 0) { /* We don't need some data yet */
+    cur++;
+    ofs++;
+  }
+
+  while (strcmp(*cur, OBJ_TYPE) != 0) {
+    if (strcmp(*cur, entity_spline.cps_quant) == 0) {
+      ent->spline.cps_quant = (size_t)atoi(*(++cur));
+      ent->spline.points = (struct Point *)calloc(ent->spline.cps_quant, sizeof(struct Point));
+      point = ent->spline.points;
+      ofs++;
+
+    } else if (strcmp(*cur, entity_spline.cp_x) == 0) {
+      if (point == NULL) {
+        fprintf(stderr, "%s: read failure\n", __func__);
+        free(ent->spline.points);
+        free(ent);
+        return NULL;
+      }
+
+      point->x = atof(*(++cur));
+      ofs++;
+    
+    } else if (strcmp(*cur, entity_spline.cp_y) == 0) {
+      if (point == NULL) {
+        fprintf(stderr, "%s: read failure\n", __func__);
+        free(ent->spline.points);
+        free(ent);
+        return NULL;
+      }
+
+      point->y = atof(*(++cur));
+      ofs++;
+      point++;
+
+    } else if (strcmp(*cur, "74") == 0) { /* Nasty workaround for testing purposes */
+     cur++;
+    }
+    cur++;
+    ofs++;
+  }
+
+  *offset = ofs;
+  return ent;
+}

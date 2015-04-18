@@ -10,6 +10,4 @@
 #define SOFT_OWN_POINTER "330"
 #define HARD_OWN_POINTER "360"
 
-#include "dxf_entity_codes.h"
-
 #endif /* _DXF_COMMON_CODES_H_ */
