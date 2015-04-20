@@ -47,18 +47,27 @@ dxf_file_open(const char *path)
   if (resolved_path == NULL) {
     resolved_path = strdup(path);
     if (resolved_path == NULL) {
-      fprintf(stderr, "%s: can't strdup(): %s\n", __func__, strerror(errno));
+      fprintf(stderr, "%s(): strdup() failure: %s\n", __func__, strerror(errno));
       return NULL;
     }
   }
 
   if ((fp = fopen(resolved_path, "r")) == NULL) {
-    fprintf(stderr, "%s: can't open %s: %s\n", __func__, resolved_path, strerror(errno));
+    fprintf(stderr, "%s(): fopen(%s, \"r\") failure: %s\n", __func__, resolved_path, strerror(errno));
     return NULL;
   }
 
   df = (struct DxfFile *)calloc(1, sizeof(struct DxfFile));
+  if (df == NULL) {
+    fprintf(stderr, "%s(): calloc() failure: %s\n", __func__, strerror(errno));
+    return NULL;
+  }
+
   df->resolved_path = strdup(resolved_path);
+  if (df->resolved_path == NULL) {
+    fprintf(stderr, "%s(): strdup() failure: %s\n", __func__, strerror(errno));
+    return NULL;
+  }
   
   free(resolved_path);
 
@@ -82,11 +91,11 @@ dxf_file_open(const char *path)
 /* df->objects = objects_read(sections.objects); */
 /* df->thumbnail = thumbnail_read(sections.thumbnail); */
 
-/*  if (df->entities == NULL) {
-    fprintf(stderr, "%s: entities_read() failure\n", __func__);
+  if (df->entities == NULL) {
+    fprintf(stderr, "%s(): entities_read() failure\n", __func__);
     file_lines_destroy(lines, lines_quant);
-    return NULL
-  } */
+    return NULL;
+  }
 
   file_lines_destroy(lines, lines_quant);
   fclose(fp);
@@ -168,7 +177,7 @@ file_lines_get(FILE *fp, size_t *lines_quant)
 
   while ((ch_read = getline(&line, &line_length, fp)) != -1) {
     if (ferror(fp)) {
-      fprintf(stderr, "%s: file error: %s\n", __func__, strerror(errno));
+      fprintf(stderr, "%s(): file error: %s\n", __func__, strerror(errno));
       free(line);
       file_lines_destroy(lines, lq);
       return NULL;
@@ -176,7 +185,7 @@ file_lines_get(FILE *fp, size_t *lines_quant)
 
     stripped = strip_str(line);
     if (stripped == NULL) {
-      fprintf(stderr, "%s: strip_str() failure\n", __func__);
+      fprintf(stderr, "%s(): strip_str() failure\n", __func__);
       free(line);
       file_lines_destroy(lines, lq);
       return NULL;
@@ -186,14 +195,22 @@ file_lines_get(FILE *fp, size_t *lines_quant)
       arr_size *= 2;
       lines = (char **)realloc(lines, arr_size * sizeof(char *));
       if (lines == NULL) {
-        fprintf(stderr, "%s: realloc() failure: %s\n", __func__, strerror(errno));
+        fprintf(stderr, "%s(): realloc() failure: %s\n", __func__, strerror(errno));
         free(line);
         free(stripped);
+        file_lines_destroy(lines, lq);
         return NULL;
       }
     }
 
     lines[lq] = strdup(stripped);
+    if (lines[lq] == NULL) {
+      fprintf(stderr, "%s: strdup() failure\n", __func__);
+      free(line);
+      free(stripped);
+      file_lines_destroy(lines, lq);
+      return NULL;
+    }
 
     free(line);
     free(stripped);
@@ -276,7 +293,7 @@ static void
 get_sections(char **lines, size_t lines_quant, struct Sections *sections)
 {
   char *line;
-  size_t i;
+  size_t line_count;
 
   sections->header = NULL;
   sections->classes = NULL;
@@ -286,34 +303,31 @@ get_sections(char **lines, size_t lines_quant, struct Sections *sections)
   sections->objects = NULL;
   sections->thumbnail = NULL;
 
-  for (i=0; i < lines_quant; i++) {
-    line = lines[i];
+  for (line_count=0; line_count < lines_quant; line_count++) {
+    line = lines[line_count];
 
     if (strcmp(line, "SECTION") == 0) {
 
-      if (strcmp(lines[i+2], "HEADER") == 0) {
-        sections->header = &lines[i+2];
+      if (strcmp(lines[line_count+2], "HEADER") == 0) {
+        sections->header = &lines[line_count+2];
 
-      } else if (strcmp(lines[i+2], "CLASSES") == 0) {
-        sections->classes = &lines[i+2];
+      } else if (strcmp(lines[line_count+2], "CLASSES") == 0) {
+        sections->classes = &lines[line_count+2];
 
-      } else if (strcmp(lines[i+2], "TABLES") == 0) {
-        sections->tables = &lines[i+2];
+      } else if (strcmp(lines[line_count+2], "TABLES") == 0) {
+        sections->tables = &lines[line_count+2];
 
-      } else if (strcmp(lines[i+2], "BLOCKS") == 0) {
-        sections->blocks = &lines[i+2];
+      } else if (strcmp(lines[line_count+2], "BLOCKS") == 0) {
+        sections->blocks = &lines[line_count+2];
 
-      } else if (strcmp(lines[i+2], "ENTITIES") == 0) {
-        sections->entities = &lines[i+2];
+      } else if (strcmp(lines[line_count+2], "ENTITIES") == 0) {
+        sections->entities = &lines[line_count+2];
 
-      } else if (strcmp(lines[i+2], "OBJECTS") == 0) {
-        sections->objects = &lines[i+2];
+      } else if (strcmp(lines[line_count+2], "OBJECTS") == 0) {
+        sections->objects = &lines[line_count+2];
 
-      } else if (strcmp(lines[i+2], "THUMBNAIL") == 0) {
-        sections->thumbnail = &lines[i+2];
-
-      } else {
-        /* unknown type */
+      } else if (strcmp(lines[line_count+2], "THUMBNAIL") == 0) {
+        sections->thumbnail = &lines[line_count+2];
       }
     }
   }
@@ -360,6 +374,11 @@ entities_read(char **base, size_t *entities_quant)
     }
   }
 
+  if (eq == 0) {
+    free(entities);
+    return NULL;
+  }
+
   entities = (union Entity *)realloc(entities, eq * sizeof(union Entity));
   *entities_quant = eq;
 
@@ -380,7 +399,7 @@ line_read(char **cur, size_t *offset)
 
   ent->type = strdup(entity_line.string);
 
-  ofs = 0;
+  ofs = 1;
   while (strcmp(*cur, entity_line.dbsect) != 0) {  /* We don't need some data yet */
     cur++;
     ofs++;
@@ -439,8 +458,7 @@ spline_read(char **cur, size_t *offset)
 
     } else if (strcmp(*cur, entity_spline.cp_x) == 0) {
       if (point == NULL) {
-        fprintf(stderr, "%s: read failure\n", __func__);
-        free(ent->spline.points);
+        fprintf(stderr, "%s(): read failure\n", __func__);
         free(ent);
         return NULL;
       }
@@ -450,8 +468,7 @@ spline_read(char **cur, size_t *offset)
     
     } else if (strcmp(*cur, entity_spline.cp_y) == 0) {
       if (point == NULL) {
-        fprintf(stderr, "%s: read failure\n", __func__);
-        free(ent->spline.points);
+        fprintf(stderr, "%s(): read failure\n", __func__);
         free(ent);
         return NULL;
       }
@@ -460,8 +477,10 @@ spline_read(char **cur, size_t *offset)
       ofs++;
       point++;
 
-    } else if (strcmp(*cur, "74") == 0) { /* Nasty workaround for testing purposes */
-     cur++;
+    } else if (strcmp(*cur, entity_spline.fitp_quant) == 0) {
+      cur++;
+    } else if (strcmp(*cur, entity_spline.knots_quant) == 0) {
+      cur++;
     }
     cur++;
     ofs++;

@@ -17,7 +17,9 @@ extern struct entity_line_t entity_line;
 struct entity_spline_t {
   char *string;
   char *dbsect;
-  char *cps_quant; 
+  char *knots_quant;
+  char *cps_quant;
+  char *fitp_quant; 
   char *cp_x;  /* cp == control point */
   char *cp_y;
 };
